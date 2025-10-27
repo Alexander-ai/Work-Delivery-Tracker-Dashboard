@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wallbridge Work Delivery Tracker</title>
+    <!-- Chart.js for Analytics Charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- FullCalendar for Calendar -->
+    <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css' rel='stylesheet' />
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js'></script>
+    <!-- jsPDF for PDF Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- html2canvas for capturing table as image -->
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; }
+        h1, h2 { color: #333; text-align: center; }
+        .container { display: none; } /* Hidden until data added */
+        .input-section { background: white; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #4CAF50; color: white; }
+        /* Removed even row grey background */
+        .status-good, .status-complete { background-color: #e8f5e8 !important; color: #2e7d32; }
+        .status-at-risk { background-color: #fff3e0 !important; color: #ef6c00; }
+        .status-overdue { background-color: #ffebee !important; color: #c62828; }
+        .progress-not-started { color: #9E9E9E; }
+        .progress-in-progress { color: #FF9800; }
+        .progress-complete { color: #4CAF50; }
+        .chart-container { position: relative; height: 400px; width: 80%; margin: 0 auto 20px auto; background: white; padding: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); overflow: hidden; display: flex; justify-content: center; align-items: center; }
+        canvas { max-width: 100%; max-height: 100%; }
+        .calendar-container, .gantt-container { position: relative; height: auto; width: 100%; margin-bottom: 20px; background: white; padding: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); overflow-x: auto; overflow-y: visible; }
+        .fallback-gantt { height: 400px; width: 80%; margin: 0 auto; }
+        .analytics { display: flex; justify-content: space-around; margin-bottom: 20px; flex-wrap: wrap; }
+        .analytic-card { background: white; padding: 15px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; flex: 1; min-width: 150px; margin: 5px; }
+        #alerts h3 { color: #333; margin-top: 20px; }
+        #alerts ul { list-style-type: none; padding: 0; }
+        #alerts li { background: #f9f9f9; margin: 5px 0; padding: 10px; border-left: 4px solid #4CAF50; }
+        button { background: #4CAF50; color: white; padding: 10px; border: none; cursor: pointer; }
+        button:hover { background: #45a049; }
+        select, input, textarea { width: 100%; padding: 5px; border: 1px solid #ddd; }
+        #addRow { margin-bottom: 10px; }
+        #debug { color: red; font-size: 12px; margin-top: 10px; text-align: center; }
+        .calendar-controls { display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 10px; }
+        #calTitle { font-weight: bold; font-size: 16px; }
+        /* Gantt Table Styles */
+        #gantt { position: relative; }
+        #gantt table { font-size: 10px; border-collapse: collapse; width: max-content; min-width: 3000px; table-layout: fixed; }
+        #gantt th, #gantt td { border: 1px solid #ddd; height: 30px; text-align: center; vertical-align: middle; position: relative; color: #333; }
+        #gantt th.week-start, #gantt td.task-cell { width: 40px; }
+        #gantt th.left-header { width: 250px; }
+        #gantt th.year-header { background-color: #c0c0c0; font-weight: bold; color: #000; }
+        #gantt th.month { background-color: #f0f0f0; font-weight: bold; color: #000; }
+        #gantt th.week-start { background-color: #d0d0d0; color: #000; }
+        #gantt td.task-cell { background-color: inherit; color: #333; }
+        #gantt .phase-header { background-color: #f9f9f9; font-weight: bold; border: 2px solid #ccc; text-align: left; padding-left: 10px; color: #000; }
+        #gantt .type-header { background-color: #e9e9e9; font-style: italic; text-align: left; padding-left: 20px; color: #333; }
+        #gantt .task-name { font-weight: normal; color: #000; text-align: left; padding-left: 10px; }
+        /* Calendar Today Highlight */
+        #calendar .fc-daygrid-day.fc-day-today,
+        #calendar .fc-multimonth-day.fc-day-today {
+            background-color: blue !important;
+        }
+        /* Modal Styles */
+        #modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        #modalContent {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 500px;
+            max-height: 70%;
+            overflow-y: auto;
+        }
+        #closeModal {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        #closeModal:hover {
+            color: black;
+        }
+    </style>
+</head>
+<body>
+    <h1>Wallbridge Work Delivery Tracker</h1>
+  
+    <!-- Input Section -->
+    <div class="input-section">
+        <h2>Add/Edit Data</h2>
+        <button id="addRow">Add New Row</button>
+        <table id="dataTable">
+            <thead>
+                <tr>
+                    <th>Assignment Name</th>
+                    <th>Type</th>
+                    <th>Project Name</th>
+                    <th>Responsible</th>
+                    <th>Delivery Date</th>
+                    <th>Days to Delivery</th>
+                    <th>Deadline Date</th>
+                    <th>Status (Auto)</th>
+                    <th>Progress</th>
+                    <th>Notes</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+        <button id="generateDashboard">Generate Dashboard</button>
+        <div id="debug"></div>
+    </div>
+    <!-- Dashboard Section -->
+    <div id="dashboard" class="container">
+        <h2>Analytics</h2>
+        <div class="analytics">
+            <div class="analytic-card">
+                <h3>Total Tasks</h3>
+                <p id="totalTasks">0</p>
+            </div>
+            <div class="analytic-card">
+                <h3>Good</h3>
+                <p id="goodCount">0</p>
+            </div>
+            <div class="analytic-card">
+                <h3>At Risk</h3>
+                <p id="atRiskCount">0</p>
+            </div>
+            <div class="analytic-card">
+                <h3>Overdue</h3>
+                <p id="overdueCount">0</p>
+            </div>
+            <div class="analytic-card">
+                <h3>Not Started</h3>
+                <p id="notStartedCount">0</p>
+            </div>
+            <div class="analytic-card">
+                <h3>In Progress</h3>
+                <p id="inProgressCount">0</p>
+            </div>
+            <div class="analytic-card">
+                <h3>Complete</h3>
+                <p id="completeCount">0</p>
+            </div>
+        </div>
+        <h2>Upcoming Alerts</h2>
+        <div id="alerts"></div>
+        <h2>Status Breakdown Chart</h2>
+        <div class="chart-container">
+            <canvas id="statusChart"></canvas>
+        </div>
+        <h2>Progress Breakdown Chart</h2>
+        <div class="chart-container">
+            <canvas id="progressChart"></canvas>
+        </div>
+        <h2>Calendar View</h2>
+        <div class="calendar-controls">
+            <button id="calPrev">Previous Month</button>
+            <button id="calToday">Today</button>
+            <button id="calNext">Next Month</button>
+            <span id="calTitle"></span>
+        </div>
+        <div class="calendar-container">
+            <div id="calendar"></div>
+        </div>
+        <h2>12-Month Gantt Chart</h2>
+        <button id="exportGantt">Download Gantt as PDF</button>
+        <div class="gantt-container">
+            <div id="gantt"></div>
+        </div>
+    </div>
+    <!-- Modal for Calendar Popup -->
+    <div id="modal">
+        <div id="modalContent">
+            <span id="closeModal">&times;</span>
+            <div id="modalBody"></div>
+        </div>
+    </div>
+    <script>
+        // Wait for DOM ready
+        document.addEventListener('DOMContentLoaded', function() {
+            // Data storage
+            let data = JSON.parse(localStorage.getItem('dashboardData')) || [];
+            const types = ['Assessment Report', 'Permit Application', 'Other'];
+            const projects = ['Martiniere', 'Fenelon', 'Casault', 'Harri', 'Grasset', 'Doigt'];
+            const progressOptions = ['Not Started', 'In Progress', 'Complete'];
+            const today = new Date('2025-10-27');
+            const todayStr = today.toISOString().split('T')[0];
+            function computeStatus(daysToDelivery) {
+                if (daysToDelivery > 30) return 'Good';
+                if (daysToDelivery > 0) return 'At Risk';
+                return 'Overdue';
+            }
+            function isValidDate(dateStr) {
+                if (!dateStr) return false;
+                const date = new Date(dateStr);
+                return !isNaN(date.getTime()) && dateStr === date.toISOString().split('T')[0];
+            }
+            // Safe destroy function
+            function safeDestroy(chartVar) {
+                if (window[chartVar] && typeof window[chartVar].destroy === 'function') {
+                    try {
+                        window[chartVar].destroy();
+                    } catch (e) {
+                        console.warn('Destroy failed for ' + chartVar + ':', e);
+                    }
+                }
+                window[chartVar] = null;
+            }
+            // Function to update dashboard if visible
+            function updateDashboardIfVisible() {
+                if (document.getElementById('dashboard').style.display === 'block') {
+                    generateDashboard();
+                }
+            }
+            // Modal functions
+            window.closeModal = function() {
+                document.getElementById('modal').style.display = 'none';
+            };
+            document.getElementById('closeModal').onclick = function() {
+                closeModal();
+            };
+            window.onclick = function(event) {
+                const modal = document.getElementById('modal');
+                if (event.target == modal) {
+                    closeModal();
+                }
+            };
+            // Populate table
+            function renderTable() {
+                const tbody = document.getElementById('tableBody');
+                tbody.innerHTML = '';
+                data.forEach((row, index) => {
+                    const daysToDelivery = row.daysToDelivery || (row.deliveryDate && isValidDate(row.deliveryDate) ? Math.floor((new Date(row.deliveryDate) - today) / (1000 * 60 * 60 * 24)) : 0);
+                    let status = computeStatus(daysToDelivery);
+                    const progress = row.progress || 'Not Started';
+                    const isComplete = progress === 'Complete';
+                    if (isComplete) status = 'Complete';
+                    const rowStatusClass = isComplete ? 'complete' : status.toLowerCase().replace(' ', '-');
+                    const displayStatus = isComplete ? 'Complete' : status;
+                    const tr = document.createElement('tr');
+                    tr.className = `status-${rowStatusClass}`;
+                    tr.innerHTML = `
+                        <td><input type="text" value="${row.name || ''}" onchange="updateData(${index}, 'name', this.value)"></td>
+                        <td><select onchange="updateData(${index}, 'type', this.value)">${types.map(t => `<option ${row.type === t ? 'selected' : ''}>${t}</option>`).join('')}</select></td>
+                        <td><select onchange="updateData(${index}, 'project', this.value)">${projects.map(p => `<option ${row.project === p ? 'selected' : ''}>${p}</option>`).join('')}</select></td>
+                        <td><input type="text" value="${row.responsible || ''}" onchange="updateData(${index}, 'responsible', this.value)"></td>
+                        <td><input type="date" value="${row.deliveryDate || ''}" onchange="updateData(${index}, 'deliveryDate', this.value); calcDays(${index})"></td>
+                        <td><span id="days-${index}">${daysToDelivery}</span></td>
+                        <td><input type="date" value="${row.deadlineDate || ''}" onchange="updateData(${index}, 'deadlineDate', this.value)"></td>
+                        <td><span class="status-${rowStatusClass}">${displayStatus}</span></td>
+                        <td><select onchange="updateData(${index}, 'progress', this.value)" class="progress-${progress.toLowerCase().replace(' ', '-')}">${progressOptions.map(p => `<option ${progress === p ? 'selected' : ''}>${p}</option>`).join('')}</select></td>
+                        <td><textarea onchange="updateData(${index}, 'notes', this.value)">${row.notes || ''}</textarea></td>
+                        <td><button onclick="deleteRow(${index})">Delete</button></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+                localStorage.setItem('dashboardData', JSON.stringify(data));
+            }
+            window.updateData = function(index, key, value) {
+                data[index][key] = value;
+                if (key === 'deliveryDate') calcDays(index);
+                renderTable();
+                updateDashboardIfVisible();
+            };
+            window.calcDays = function(index) {
+                if (!data[index].deliveryDate || !isValidDate(data[index].deliveryDate)) {
+                    data[index].daysToDelivery = 0;
+                    renderTable();
+                    updateDashboardIfVisible();
+                    return;
+                }
+                const delivery = new Date(data[index].deliveryDate);
+                data[index].daysToDelivery = Math.floor((delivery - today) / (1000 * 60 * 60 * 24));
+                localStorage.setItem('dashboardData', JSON.stringify(data));
+                renderTable();
+                updateDashboardIfVisible();
+            };
+            window.deleteRow = function(index) {
+                data.splice(index, 1);
+                renderTable();
+                updateDashboardIfVisible();
+            };
+            document.getElementById('addRow').addEventListener('click', () => {
+                data.push({
+                    project: projects[0],
+                    type: types[0],
+                    name: '',
+                    responsible: '',
+                    deliveryDate: '',
+                    daysToDelivery: 0,
+                    deadlineDate: '',
+                    progress: progressOptions[0],
+                    notes: ''
+                });
+                renderTable();
+                updateDashboardIfVisible();
+            });
+            window.generateDashboard = function() {
+                if (data.length === 0) return alert('Add some data first!');
+                console.log('Generating dashboard with data:', data); // Debug log
+                document.querySelector('.input-section').style.display = 'block';
+                document.getElementById('dashboard').style.display = 'block';
+                document.getElementById('debug').innerHTML = ''; // Clear debug
+                try {
+                    // Analytics
+                    const statusCounts = { Good: 0, 'At Risk': 0, Overdue: 0, Complete: 0 };
+                    const progressCounts = { 'Not Started': 0, 'In Progress': 0, Complete: 0 };
+                    data.forEach(item => {
+                        const days = item.daysToDelivery || 0;
+                        let status = computeStatus(days);
+                        const progress = item.progress || 'Not Started';
+                        if (progress === 'Complete') status = 'Complete';
+                        statusCounts[status]++;
+                        progressCounts[progress]++;
+                    });
+                    document.getElementById('totalTasks').textContent = data.length;
+                    document.getElementById('goodCount').textContent = statusCounts.Good;
+                    document.getElementById('atRiskCount').textContent = statusCounts['At Risk'];
+                    document.getElementById('overdueCount').textContent = statusCounts.Overdue;
+                    document.getElementById('notStartedCount').textContent = progressCounts['Not Started'];
+                    document.getElementById('inProgressCount').textContent = progressCounts['In Progress'];
+                    document.getElementById('completeCount').textContent = progressCounts.Complete;
+                    // Upcoming Alerts
+                    const alerts = { '30 Day Notices': [], Deadlines: [], Expiries: [] };
+                    data.forEach(item => {
+                        if (!item.deliveryDate || !isValidDate(item.deliveryDate)) return;
+                        const delivDate = new Date(item.deliveryDate);
+                        const daysToDeliv = Math.floor((delivDate - today) / (1000 * 60 * 60 * 24));
+                        if (daysToDeliv < 0) return;
+                        const title = `${item.project || ''} - ${item.type || ''}: ${item.name || ''}`;
+                        // Expiry
+                        alerts.Expiries.push({ date: item.deliveryDate, title, days: daysToDeliv });
+                        if (item.deadlineDate && isValidDate(item.deadlineDate)) {
+                            const deadlDate = new Date(item.deadlineDate);
+                            const daysToDeadl = Math.floor((deadlDate - today) / (1000 * 60 * 60 * 24));
+                            if (daysToDeadl >= 0) {
+                                alerts.Deadlines.push({ date: item.deadlineDate, title, days: daysToDeadl });
+                            }
+                            const thirtyBefore = new Date(deadlDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+                            const daysToThirty = Math.floor((thirtyBefore - today) / (1000 * 60 * 60 * 24));
+                            if (daysToThirty >= 0) {
+                                alerts['30 Day Notices'].push({ date: thirtyBefore.toISOString().split('T')[0], title, days: daysToThirty });
+                            }
+                        }
+                    });
+                    // Sort
+                    Object.keys(alerts).forEach(key => alerts[key].sort((a, b) => new Date(a.date) - new Date(b.date)));
+                    let alertsHtml = '';
+                    Object.keys(alerts).forEach(key => {
+                        if (alerts[key].length === 0) return;
+                        alertsHtml += `<h3>${key}</h3><ul>`;
+                        alerts[key].forEach(al => {
+                            alertsHtml += `<li>${al.date} (${al.days} days): ${al.title}</li>`;
+                        });
+                        alertsHtml += '</ul>';
+                    });
+                    document.getElementById('alerts').innerHTML = alertsHtml;
+                    // Status Pie Chart - Safe destroy
+                    safeDestroy('statusChart');
+                    const statusCtx = document.getElementById('statusChart').getContext('2d');
+                    window.statusChart = new Chart(statusCtx, {
+                        type: 'pie',
+                        data: {
+                            labels: Object.keys(statusCounts),
+                            datasets: [{ data: Object.values(statusCounts), backgroundColor: ['#4CAF50', '#FFEB3B', '#F44336', '#4CAF50'] }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { title: { display: true, text: 'Status Breakdown' } }
+                        }
+                    });
+                    console.log('Status chart rendered');
+                    // Progress Bar Chart - Safe destroy, integers on y
+                    safeDestroy('progressChart');
+                    const progressCtx = document.getElementById('progressChart').getContext('2d');
+                    window.progressChart = new Chart(progressCtx, {
+                        type: 'bar',
+                        data: {
+                            labels: Object.keys(progressCounts),
+                            datasets: [{ label: 'Count', data: Object.values(progressCounts), backgroundColor: ['#9E9E9E', '#FF9800', '#4CAF50'] }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { title: { display: true, text: 'Progress Breakdown' } },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: {
+                                        stepSize: 1,
+                                        precision: 0
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    console.log('Progress chart rendered');
+                    // Calendar - MultiMonth 4x2
+                    const calendarEl = document.getElementById('calendar');
+                    if (calendarEl._fullCalendar) {
+                        calendarEl._fullCalendar.destroy();
+                    }
+                    calendarEl.innerHTML = ''; // Clear
+                    const initialDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+                    const minDate = new Date(initialDate);
+                    const events = [];
+                    data
+                        .filter(item => item.deliveryDate && isValidDate(item.deliveryDate))
+                        .forEach(item => {
+                            const shortTitle = `${item.project || 'Untitled'} - ${item.name || ''}`;
+                            const delivDate = new Date(item.deliveryDate);
+                            const daysToDeliv = Math.floor((delivDate - today) / (1000 * 60 * 60 * 24));
+                            if (daysToDeliv >= 0) {
+                                events.push({
+                                    title: `Expiry - ${shortTitle}`,
+                                    start: item.deliveryDate,
+                                    backgroundColor: '#F44336'
+                                });
+                            }
+                            if (item.deadlineDate && isValidDate(item.deadlineDate)) {
+                                const deadlDate = new Date(item.deadlineDate);
+                                const daysToDeadl = Math.floor((deadlDate - today) / (1000 * 60 * 60 * 24));
+                                if (daysToDeadl >= 0) {
+                                    events.push({
+                                        title: `Deadline - ${shortTitle}`,
+                                        start: item.deadlineDate,
+                                        backgroundColor: '#FF9800'
+                                    });
+                                }
+                                const thirtyBefore = new Date(deadlDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+                                const daysToThirty = Math.floor((thirtyBefore - today) / (1000 * 60 * 60 * 24));
+                                if (daysToThirty >= 0) {
+                                    events.push({
+                                        title: `30 Day Notice - ${shortTitle}`,
+                                        start: thirtyBefore.toISOString().split('T')[0],
+                                        backgroundColor: '#FFEB3B'
+                                    });
+                                }
+                            }
+                        });
+                    console.log('Calendar events:', events);
+                    const calendar = new FullCalendar.Calendar(calendarEl, {
+                        initialDate: initialDate,
+                        initialView: 'multiMonth',
+                        duration: { months: 8 },
+                        multiMonthMaxColumns: 4,
+                        events: events,
+                        height: 'auto', // Auto height to fit content
+                        headerToolbar: {
+                            left: '',
+                            center: 'title',
+                            right: ''
+                        },
+                        dateClick: function(info) {
+                            showCalendarEvents(info.dateStr);
+                        },
+                        eventClick: function(info) {
+                            showCalendarEvents(info.event.start.toISOString().split('T')[0]);
+                        }
+                    });
+                    function showCalendarEvents(dateStr) {
+                        const eventsOnDate = calendar.getEvents().filter(event => {
+                            const eventStart = event.start ? event.start.toISOString().split('T')[0] : null;
+                            return eventStart === dateStr;
+                        });
+                        let content = `<h3>Events on ${dateStr}:</h3>`;
+                        if (eventsOnDate.length > 0) {
+                            eventsOnDate.forEach(event => {
+                                content += `<p>${event.title}</p>`;
+                            });
+                        } else {
+                            content = `<p>No events on ${dateStr}</p>`;
+                        }
+                        document.getElementById('modalBody').innerHTML = content;
+                        document.getElementById('modal').style.display = 'block';
+                    }
+                    calendarEl._fullCalendar = calendar;
+                    calendar.render();
+                    // Calendar controls
+                    const cal = calendarEl._fullCalendar;
+                    const updateCalTitle = () => {
+                        document.getElementById('calTitle').textContent = cal.view.title;
+                    };
+                    document.getElementById('calPrev').onclick = () => {
+                        const current = cal.getDate();
+                        let newMonth = current.getMonth() - 1;
+                        let newYear = current.getFullYear();
+                        if (newMonth < 0) {
+                            newMonth = 11;
+                            newYear--;
+                        }
+                        const proposed = new Date(newYear, newMonth, 1);
+                        if (proposed < minDate) {
+                            return;
+                        }
+                        cal.gotoDate(proposed);
+                        updateCalTitle();
+                    };
+                    document.getElementById('calNext').onclick = () => {
+                        const current = cal.getDate();
+                        let newMonth = current.getMonth() + 1;
+                        let newYear = current.getFullYear();
+                        if (newMonth > 11) {
+                            newMonth = 0;
+                            newYear++;
+                        }
+                        const proposed = new Date(newYear, newMonth, 1);
+                        cal.gotoDate(proposed);
+                        updateCalTitle();
+                    };
+                    document.getElementById('calToday').onclick = () => {
+                        cal.today();
+                        updateCalTitle();
+                    };
+                    updateCalTitle();
+                    console.log('Calendar rendered');
+                    // Gantt Table - Dynamic from 1 month prior to +1 year
+                    const ganttEl = document.getElementById('gantt');
+                    ganttEl.innerHTML = '';
+                    const startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+                    const endDate = new Date(today.getFullYear() + 1, 11, 31);
+                    // Generate week starts (Mondays), starting from the Monday of the week containing startDate
+                    let currentMonday = new Date(startDate);
+                    let day = currentMonday.getDay();
+                    let daysToSubtract = day === 0 ? 6 : day - 1;
+                    currentMonday.setDate(currentMonday.getDate() - daysToSubtract);
+                    let weekStarts = [];
+                    while (currentMonday <= endDate) {
+                        weekStarts.push(new Date(currentMonday).toISOString().split('T')[0]);
+                        currentMonday.setDate(currentMonday.getDate() + 7);
+                    }
+                    // Find today week index
+                    let todayWeekIndex = -1;
+                    for (let i = 0; i < weekStarts.length; i++) {
+                        const wsDate = new Date(weekStarts[i]);
+                        const weekEnd = new Date(wsDate.getTime() + 6 * 24 * 60 * 60 * 1000);
+                        if (wsDate <= today && today <= weekEnd) {
+                            todayWeekIndex = i;
+                            break;
+                        }
+                    }
+                    if (todayWeekIndex === -1) todayWeekIndex = 0;
+                    // Month starts and colspans, starting from the month of the first week
+                    const firstWeekDate = new Date(weekStarts[0]);
+                    let m = new Date(firstWeekDate.getFullYear(), firstWeekDate.getMonth(), 1);
+                    const monthStarts = [];
+                    while (m <= endDate) {
+                        monthStarts.push(new Date(m));
+                        m.setMonth(m.getMonth() + 1);
+                    }
+                    const colspans = monthStarts.map(ms => {
+                        let count = 0;
+                        for (let ws of weekStarts) {
+                            const wsD = new Date(ws);
+                            if (wsD.getMonth() === ms.getMonth() && wsD.getFullYear() === ms.getFullYear()) count++;
+                        }
+                        return count;
+                    });
+                    const monthNamesFull = monthStarts.map(ms => ms.toLocaleString('en-US', { month: 'long' }).toUpperCase());
+                    let table = document.createElement('table');
+                    let thead = document.createElement('thead');
+                    // Year header row
+                    let yearTr = document.createElement('tr');
+                    let leftHeaderTh = document.createElement('th');
+                    leftHeaderTh.textContent = 'Project / Type / Assignment';
+                    leftHeaderTh.rowSpan = 1;
+                    leftHeaderTh.className = 'left-header';
+                    yearTr.appendChild(leftHeaderTh);
+                    // Group months by year for year colspans
+                    let yearGroups = [];
+                    let i = 0;
+                    while (i < monthStarts.length) {
+                        let y = monthStarts[i].getFullYear();
+                        let sumC = 0;
+                        while (i < monthStarts.length && monthStarts[i].getFullYear() === y) {
+                            sumC += colspans[i];
+                            i++;
+                        }
+                        yearGroups.push({year: y, colspan: sumC});
+                    }
+                    yearGroups.forEach(group => {
+                        let yearTh = document.createElement('th');
+                        yearTh.textContent = group.year;
+                        yearTh.colSpan = group.colspan;
+                        yearTh.className = 'year-header';
+                        yearTr.appendChild(yearTh);
+                    });
+                    thead.appendChild(yearTr);
+                    // Month header row
+                    let monthTr = document.createElement('tr');
+                    let leftEmptyThMonth = document.createElement('th');
+                    leftEmptyThMonth.className = 'left-header';
+                    leftEmptyThMonth.textContent = '';
+                    monthTr.appendChild(leftEmptyThMonth);
+                    colspans.forEach((span, mi) => {
+                        let monthTh = document.createElement('th');
+                        monthTh.textContent = monthNamesFull[mi];
+                        monthTh.colSpan = span;
+                        monthTh.className = 'month';
+                        monthTr.appendChild(monthTh);
+                    });
+                    thead.appendChild(monthTr);
+                    // Week start days row
+                    let weekTr = document.createElement('tr');
+                    let leftEmptyThWeek = document.createElement('th');
+                    leftEmptyThWeek.className = 'left-header';
+                    leftEmptyThWeek.textContent = '';
+                    weekTr.appendChild(leftEmptyThWeek);
+                    weekStarts.forEach((ws, i) => {
+                        let dayTh = document.createElement('th');
+                        let d = new Date(ws);
+                        dayTh.textContent = d.getDate();
+                        dayTh.className = 'week-start';
+                        weekTr.appendChild(dayTh);
+                    });
+                    thead.appendChild(weekTr);
+                    let tbody = document.createElement('tbody');
+                    // Sort data for grouping
+                    const filteredData = data.filter(item => item.deliveryDate && isValidDate(item.deliveryDate)).sort((a, b) => {
+                        if ((a.project || '') !== (b.project || '')) return (a.project || '').localeCompare(b.project || '');
+                        if (a.type !== b.type) return a.type.localeCompare(b.type);
+                        return (a.name || '').localeCompare(b.name || '');
+                    });
+                    let currentProject = null;
+                    let currentType = null;
+                    filteredData.forEach((item) => {
+                        const progressItem = item.progress || 'Not Started';
+                        const isComplete = progressItem === 'Complete';
+                        const daysTo = item.daysToDelivery || 0;
+                        let startDateTask, endDateTask;
+                        const deliveryDateTask = new Date(item.deliveryDate);
+                        if (deliveryDateTask < today) {
+                            if (isComplete) {
+                                startDateTask = new Date(deliveryDateTask);
+                                endDateTask = new Date(today);
+                            } else {
+                                startDateTask = new Date(deliveryDateTask);
+                                endDateTask = new Date(deliveryDateTask);
+                            }
+                        } else {
+                            startDateTask = new Date(today);
+                            endDateTask = new Date(deliveryDateTask);
+                        }
+                        const deadlineDateTask = item.deadlineDate && isValidDate(item.deadlineDate) ? new Date(item.deadlineDate) : endDateTask;
+                        endDateTask = new Date(Math.max(endDateTask.getTime(), deadlineDateTask.getTime()));
+                        if (item.project !== currentProject) {
+                            // Project header
+                            let trP = document.createElement('tr');
+                            let tdP = document.createElement('td');
+                            tdP.textContent = item.project || 'Untitled Project';
+                            tdP.colSpan = weekStarts.length + 1;
+                            tdP.className = 'phase-header';
+                            trP.appendChild(tdP);
+                            tbody.appendChild(trP);
+                            currentProject = item.project;
+                            currentType = null;
+                        }
+                        if (item.type !== currentType) {
+                            // Type header
+                            let trT = document.createElement('tr');
+                            let tdT = document.createElement('td');
+                            tdT.textContent = item.type;
+                            tdT.colSpan = weekStarts.length + 1;
+                            tdT.className = 'type-header';
+                            trT.appendChild(tdT);
+                            tbody.appendChild(trT);
+                            currentType = item.type;
+                        }
+                        // Task row
+                        let trTask = document.createElement('tr');
+                        let tdName = document.createElement('td');
+                        tdName.textContent = item.name;
+                        tdName.className = 'task-name';
+                        if (isComplete) {
+                            tdName.style.backgroundColor = '#2e7d32';
+                            tdName.style.color = 'white';
+                        }
+                        trTask.appendChild(tdName);
+                        weekStarts.forEach((ws, i) => {
+                            let weekStart = new Date(ws);
+                            let weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+                            let cell = document.createElement('td');
+                            cell.className = 'task-cell';
+                            if (startDateTask < weekEnd && endDateTask > weekStart) {
+                                let cellColor;
+                                if (isComplete) {
+                                    cellColor = '#2e7d32'; // dark green
+                                } else {
+                                    const delivery = new Date(item.deliveryDate);
+                                    const thirtyDaysBefore = new Date(delivery.getTime() - 30 * 24 * 60 * 60 * 1000);
+                                    const weekMid = new Date((weekStart.getTime() + weekEnd.getTime()) / 2);
+                                    if (weekMid < thirtyDaysBefore) {
+                                        cellColor = '#4CAF50'; // green
+                                    } else if (weekMid < delivery) {
+                                        cellColor = '#FFEB3B'; // orange
+                                    } else {
+                                        cellColor = '#F44336'; // red
+                                    }
+                                }
+                                cell.style.backgroundColor = cellColor;
+                            }
+                            trTask.appendChild(cell);
+                        });
+                        tbody.appendChild(trTask);
+                    });
+                    table.appendChild(thead);
+                    table.appendChild(tbody);
+                    table.style.width = (250 + weekStarts.length * 40) + 'px';
+                    ganttEl.appendChild(table);
+                    // Dynamic height for Gantt container
+                    const ganttContainer = document.querySelector('.gantt-container');
+                    ganttContainer.style.height = (table.offsetHeight + 20) + 'px';
+                    // Add continuous blue line overlay on today's date
+                    if (todayWeekIndex >= 0) {
+                        ganttEl.style.position = 'relative';
+                        const todayDayOfWeek = today.getDay();
+                        const daysFromMon = todayDayOfWeek === 0 ? 6 : todayDayOfWeek - 1;
+                        const offset = (daysFromMon / 7) * 40;
+                        const lineDiv = document.createElement('div');
+                        lineDiv.style.cssText = `
+                            position: absolute;
+                            left: ${250 + (todayWeekIndex * 40 + offset)}px;
+                            top: 0;
+                            bottom: 0;
+                            width: 3px;
+                            background-color: blue;
+                            z-index: 10;
+                            pointer-events: none;
+                        `;
+                        ganttEl.appendChild(lineDiv);
+                    }
+                    // PDF export using html2canvas to capture the table as image
+                    document.getElementById('exportGantt').onclick = () => {
+                        const element = document.querySelector('#gantt table');
+                        html2canvas(element, {
+                            scale: 1, // Adjust scale for quality vs size
+                            useCORS: true,
+                            allowTaint: true,
+                            backgroundColor: '#ffffff',
+                            width: element.scrollWidth,
+                            height: element.scrollHeight
+                        }).then(canvas => {
+                            const imgData = canvas.toDataURL('image/png');
+                            const { jsPDF } = window.jspdf;
+                            const pdf = new jsPDF('landscape', 'pt', 'a4');
+                            const imgProps = pdf.getImageProperties(imgData);
+                            const pdfWidth = pdf.internal.pageSize.getWidth();
+                            const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+                            let heightLeft = pdfHeight;
+                            let position = 0;
+                            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+                            heightLeft -= pdf.internal.pageSize.getHeight();
+                            while (heightLeft >= 0) {
+                                position = heightLeft - pdfHeight;
+                                pdf.addPage();
+                                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+                                heightLeft -= pdf.internal.pageSize.getHeight();
+                            }
+                            pdf.save('Gantt_Chart.pdf');
+                        }).catch(err => {
+                            console.error('PDF Export Error:', err);
+                            alert('PDF export failed: ' + err.message);
+                        });
+                    };
+                    console.log('Gantt table rendered');
+                } catch (err) {
+                    console.error('Dashboard error:', err);
+                    document.getElementById('debug').innerHTML = `Error: ${err.message}. Check console.`;
+                }
+            };
+            document.getElementById('generateDashboard').addEventListener('click', generateDashboard);
+            // Initial render
+            renderTable();
+        });
+    </script>
+</body>
+</html>
