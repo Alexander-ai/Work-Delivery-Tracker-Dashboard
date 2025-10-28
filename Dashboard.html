@@ -9,10 +9,8 @@
     <!-- FullCalendar for Calendar -->
     <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css' rel='stylesheet' />
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js'></script>
-    <!-- jsPDF for PDF Export -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <!-- html2canvas for capturing table as image -->
-    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <!-- html2pdf.js for PDF Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; }
         h1, h2 { color: #333; text-align: center; }
@@ -197,7 +195,7 @@
             const types = ['Assessment Report', 'Permit Application', 'Other'];
             const projects = ['Martiniere', 'Fenelon', 'Casault', 'Harri', 'Grasset', 'Doigt'];
             const progressOptions = ['Not Started', 'In Progress', 'Complete'];
-            const today = new Date('2025-10-27');
+            const today = new Date('2025-10-28');
             const todayStr = today.toISOString().split('T')[0];
             function computeStatus(daysToDelivery) {
                 if (daysToDelivery > 30) return 'Good';
@@ -337,23 +335,26 @@
                     // Upcoming Alerts
                     const alerts = { '30 Day Notices': [], Deadlines: [], Expiries: [] };
                     data.forEach(item => {
-                        if (!item.deliveryDate || !isValidDate(item.deliveryDate)) return;
-                        const delivDate = new Date(item.deliveryDate);
-                        const daysToDeliv = Math.floor((delivDate - today) / (1000 * 60 * 60 * 24));
-                        if (daysToDeliv < 0) return;
                         const title = `${item.project || ''} - ${item.type || ''}: ${item.name || ''}`;
-                        // Expiry
-                        alerts.Expiries.push({ date: item.deliveryDate, title, days: daysToDeliv });
+                        // Expiry and 30 day notices based on delivery
+                        if (item.deliveryDate && isValidDate(item.deliveryDate)) {
+                            const delivDate = new Date(item.deliveryDate);
+                            const daysToDeliv = Math.floor((delivDate - today) / (1000 * 60 * 60 * 24));
+                            if (daysToDeliv >= 0) {
+                                alerts.Expiries.push({ date: item.deliveryDate, title, days: daysToDeliv });
+                            }
+                            const thirtyBefore = new Date(delivDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+                            const daysToThirty = Math.floor((thirtyBefore - today) / (1000 * 60 * 60 * 24));
+                            if (daysToThirty >= 0) {
+                                alerts['30 Day Notices'].push({ date: thirtyBefore.toISOString().split('T')[0], title, days: daysToThirty });
+                            }
+                        }
+                        // Deadlines
                         if (item.deadlineDate && isValidDate(item.deadlineDate)) {
                             const deadlDate = new Date(item.deadlineDate);
                             const daysToDeadl = Math.floor((deadlDate - today) / (1000 * 60 * 60 * 24));
                             if (daysToDeadl >= 0) {
                                 alerts.Deadlines.push({ date: item.deadlineDate, title, days: daysToDeadl });
-                            }
-                            const thirtyBefore = new Date(deadlDate.getTime() - 30 * 24 * 60 * 60 * 1000);
-                            const daysToThirty = Math.floor((thirtyBefore - today) / (1000 * 60 * 60 * 24));
-                            if (daysToThirty >= 0) {
-                                alerts['30 Day Notices'].push({ date: thirtyBefore.toISOString().split('T')[0], title, days: daysToThirty });
                             }
                         }
                     });
@@ -419,46 +420,49 @@
                     const initialDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
                     const minDate = new Date(initialDate);
                     const events = [];
-                    data
-                        .filter(item => item.deliveryDate && isValidDate(item.deliveryDate))
-                        .forEach(item => {
-                            const shortTitle = `${item.project || 'Untitled'} - ${item.name || ''}`;
+                    data.forEach(item => {
+                        const shortTitle = `${item.project || 'Untitled'} - ${item.name || ''}`;
+                        // Delivery event and 30 day notice
+                        if (item.deliveryDate && isValidDate(item.deliveryDate)) {
                             const delivDate = new Date(item.deliveryDate);
                             const daysToDeliv = Math.floor((delivDate - today) / (1000 * 60 * 60 * 24));
                             if (daysToDeliv >= 0) {
                                 events.push({
-                                    title: `Expiry - ${shortTitle}`,
+                                    title: `Delivery Date - ${shortTitle}`,
                                     start: item.deliveryDate,
+                                    backgroundColor: '#FF9800'
+                                });
+                            }
+                            const thirtyBefore = new Date(delivDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+                            const daysToThirty = Math.floor((thirtyBefore - today) / (1000 * 60 * 60 * 24));
+                            if (daysToThirty >= 0) {
+                                events.push({
+                                    title: `30 Day Notice - ${shortTitle}`,
+                                    start: thirtyBefore.toISOString().split('T')[0],
+                                    backgroundColor: '#FFEB3B'
+                                });
+                            }
+                        }
+                        // Deadline event
+                        if (item.deadlineDate && isValidDate(item.deadlineDate)) {
+                            const deadlDate = new Date(item.deadlineDate);
+                            const daysToDeadl = Math.floor((deadlDate - today) / (1000 * 60 * 60 * 24));
+                            if (daysToDeadl >= 0) {
+                                events.push({
+                                    title: `Deadline - ${shortTitle}`,
+                                    start: item.deadlineDate,
                                     backgroundColor: '#F44336'
                                 });
                             }
-                            if (item.deadlineDate && isValidDate(item.deadlineDate)) {
-                                const deadlDate = new Date(item.deadlineDate);
-                                const daysToDeadl = Math.floor((deadlDate - today) / (1000 * 60 * 60 * 24));
-                                if (daysToDeadl >= 0) {
-                                    events.push({
-                                        title: `Deadline - ${shortTitle}`,
-                                        start: item.deadlineDate,
-                                        backgroundColor: '#FF9800'
-                                    });
-                                }
-                                const thirtyBefore = new Date(deadlDate.getTime() - 30 * 24 * 60 * 60 * 1000);
-                                const daysToThirty = Math.floor((thirtyBefore - today) / (1000 * 60 * 60 * 24));
-                                if (daysToThirty >= 0) {
-                                    events.push({
-                                        title: `30 Day Notice - ${shortTitle}`,
-                                        start: thirtyBefore.toISOString().split('T')[0],
-                                        backgroundColor: '#FFEB3B'
-                                    });
-                                }
-                            }
-                        });
+                        }
+                    });
                     console.log('Calendar events:', events);
                     const calendar = new FullCalendar.Calendar(calendarEl, {
                         initialDate: initialDate,
                         initialView: 'multiMonth',
                         duration: { months: 8 },
                         multiMonthMaxColumns: 4,
+                        showNonCurrentDates: false,
                         events: events,
                         height: 'auto', // Auto height to fit content
                         headerToolbar: {
@@ -534,15 +538,15 @@
                     ganttEl.innerHTML = '';
                     const startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
                     const endDate = new Date(today.getFullYear() + 1, 11, 31);
-                    // Generate week starts (Mondays), starting from the Monday of the week containing startDate
-                    let currentMonday = new Date(startDate);
-                    let day = currentMonday.getDay();
-                    let daysToSubtract = day === 0 ? 6 : day - 1;
-                    currentMonday.setDate(currentMonday.getDate() - daysToSubtract);
+                    // Generate week starts (Sundays), starting from the Sunday of the week containing startDate
+                    let currentSunday = new Date(startDate);
+                    let day = currentSunday.getDay();
+                    let daysToSubtract = day;
+                    currentSunday.setDate(currentSunday.getDate() - daysToSubtract);
                     let weekStarts = [];
-                    while (currentMonday <= endDate) {
-                        weekStarts.push(new Date(currentMonday).toISOString().split('T')[0]);
-                        currentMonday.setDate(currentMonday.getDate() + 7);
+                    while (currentSunday <= endDate) {
+                        weekStarts.push(new Date(currentSunday).toISOString().split('T')[0]);
+                        currentSunday.setDate(currentSunday.getDate() + 7);
                     }
                     // Find today week index
                     let todayWeekIndex = -1;
@@ -728,13 +732,10 @@
                     // Add continuous blue line overlay on today's date
                     if (todayWeekIndex >= 0) {
                         ganttEl.style.position = 'relative';
-                        const todayDayOfWeek = today.getDay();
-                        const daysFromMon = todayDayOfWeek === 0 ? 6 : todayDayOfWeek - 1;
-                        const offset = (daysFromMon / 7) * 40;
                         const lineDiv = document.createElement('div');
                         lineDiv.style.cssText = `
                             position: absolute;
-                            left: ${250 + (todayWeekIndex * 40 + offset)}px;
+                            left: ${250 + (todayWeekIndex * 40)}px;
                             top: 0;
                             bottom: 0;
                             width: 3px;
@@ -744,38 +745,27 @@
                         `;
                         ganttEl.appendChild(lineDiv);
                     }
-                    // PDF export using html2canvas to capture the table as image
+                    // PDF export using html2pdf.js
                     document.getElementById('exportGantt').onclick = () => {
-                        const element = document.querySelector('#gantt table');
-                        html2canvas(element, {
-                            scale: 1, // Adjust scale for quality vs size
-                            useCORS: true,
-                            allowTaint: true,
-                            backgroundColor: '#ffffff',
-                            width: element.scrollWidth,
-                            height: element.scrollHeight
-                        }).then(canvas => {
-                            const imgData = canvas.toDataURL('image/png');
-                            const { jsPDF } = window.jspdf;
-                            const pdf = new jsPDF('landscape', 'pt', 'a4');
-                            const imgProps = pdf.getImageProperties(imgData);
-                            const pdfWidth = pdf.internal.pageSize.getWidth();
-                            const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-                            let heightLeft = pdfHeight;
-                            let position = 0;
-                            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-                            heightLeft -= pdf.internal.pageSize.getHeight();
-                            while (heightLeft >= 0) {
-                                position = heightLeft - pdfHeight;
-                                pdf.addPage();
-                                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-                                heightLeft -= pdf.internal.pageSize.getHeight();
-                            }
-                            pdf.save('Gantt_Chart.pdf');
-                        }).catch(err => {
-                            console.error('PDF Export Error:', err);
-                            alert('PDF export failed: ' + err.message);
-                        });
+                        const element = document.querySelector('#gantt');
+                        const opt = {
+                            margin: 0.5,
+                            filename: 'Gantt_Chart.pdf',
+                            image: { type: 'jpeg', quality: 0.98 },
+                            html2canvas: { 
+                                scale: 0.8, // Adjust for quality vs file size; lower for wide tables
+                                useCORS: true,
+                                letterRendering: true,
+                                allowTaint: true
+                            },
+                            jsPDF: { 
+                                unit: 'in', 
+                                format: 'a4', 
+                                orientation: 'landscape' 
+                            },
+                            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+                        };
+                        html2pdf().set(opt).from(element).save();
                     };
                     console.log('Gantt table rendered');
                 } catch (err) {
