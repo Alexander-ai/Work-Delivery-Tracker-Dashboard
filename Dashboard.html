@@ -15,17 +15,39 @@
         body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; }
         h1, h2 { color: #333; text-align: center; }
         .container { display: none; } /* Hidden until data added */
-        .input-section { background: white; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .input-section {
+            background: white;
+            padding: 20px;
+            margin: 0 auto 20px auto; /* Centers horizontally; keeps bottom margin */
+            max-width: 1800px; /* Adjust this: e.g., 1000px for narrower, 1400px for wider */
+            width: 95%; /* Fills most of the screen on smaller displays */
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
         table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
         th { background-color: #4CAF50; color: white; }
+        #dataTable th:nth-child(10), #dataTable td:nth-child(10) { min-width: 200px; }
+        #dataTable td:nth-child(6), #dataTable th:nth-child(6) { text-align: center; }
+        .filter-toggle { background: #2196F3; color: white; padding: 5px 10px; border: none; cursor: pointer; margin-bottom: 10px; }
+        .filter-row { display: none; background-color: #f9f9f9; }
+        .filter-row.show { display: table-row; }
+        .filter-row th { padding: 8px; vertical-align: top; } /* Matches new uniform padding */
+        .filter-group { display: flex; flex-direction: column; }
+        .filter-group label { display: block; margin: 2px 0; font-size: 12px; cursor: pointer; }
+        .filter-group input[type="checkbox"] { margin-right: 5px; }
         /* Removed even row grey background */
-        .status-good, .status-complete { background-color: #e8f5e8 !important; color: #2e7d32; }
+        .status-got-time, .status-complete { background-color: #e8f5e8 !important; color: #2e7d32; }
+        .status-complete { background-color: #2e7d32 !important; color: white; }
         .status-at-risk { background-color: #fff3e0 !important; color: #ef6c00; }
         .status-overdue { background-color: #ffebee !important; color: #c62828; }
         .progress-not-started { color: #9E9E9E; }
         .progress-in-progress { color: #FF9800; }
-        .progress-complete { color: #4CAF50; }
+        .progress-submitted { color: #2196F3; }
+        .progress-complete-accepted { color: #2e7d32; }
         .chart-container { position: relative; height: 400px; width: 80%; margin: 0 auto 20px auto; background: white; padding: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); overflow: hidden; display: flex; justify-content: center; align-items: center; }
         canvas { max-width: 100%; max-height: 100%; }
         .calendar-container, .gantt-container { position: relative; height: auto; width: 100%; margin-bottom: 20px; background: white; padding: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); overflow-x: auto; overflow-y: visible; }
@@ -37,28 +59,121 @@
         #alerts li { background: #f9f9f9; margin: 5px 0; padding: 10px; border-left: 4px solid #4CAF50; }
         button { background: #4CAF50; color: white; padding: 10px; border: none; cursor: pointer; }
         button:hover { background: #45a049; }
-        select, input, textarea { width: 100%; padding: 5px; border: 1px solid #ddd; }
+        select, input, textarea {
+            width: 100%;
+            padding: 1px;
+            border: 1px solid #ddd;
+            box-sizing: border-box; /* Includes border in width, so it fits flush */
+            margin: 0;
+        }
+        #dataTable td:nth-child(4) input[type="text"] {
+            width: 120px; /* Adjust this value: e.g., 100px for narrower, 150px for wider */
+            margin: 0 auto; /* Centers the input box in the cell if needed */
+            display: block; /* Ensures it behaves as a block for centering */
+            padding: 1px;
+        }
+        textarea { height: 40px; resize: vertical; padding: 1px;}
         #addRow { margin-bottom: 10px; }
         #debug { color: red; font-size: 12px; margin-top: 10px; text-align: center; }
         .calendar-controls { display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 10px; }
         #calTitle { font-weight: bold; font-size: 16px; }
-        /* Gantt Table Styles */
-        #gantt { position: relative; }
-        #gantt table { font-size: 10px; border-collapse: collapse; width: max-content; min-width: 3000px; table-layout: fixed; }
-        #gantt th, #gantt td { border: 1px solid #ddd; height: 30px; text-align: center; vertical-align: middle; position: relative; color: #333; }
-        #gantt th.week-start, #gantt td.task-cell { width: 40px; }
-        #gantt th.left-header { width: 250px; }
-        #gantt th.year-header { background-color: #c0c0c0; font-weight: bold; color: #000; }
-        #gantt th.month { background-color: #f0f0f0; font-weight: bold; color: #000; }
-        #gantt th.week-start { background-color: #d0d0d0; color: #000; }
-        #gantt td.task-cell { background-color: inherit; color: #333; }
-        #gantt .phase-header { background-color: #f9f9f9; font-weight: bold; border: 2px solid #ccc; text-align: left; padding-left: 10px; color: #000; }
-        #gantt .type-header { background-color: #e9e9e9; font-style: italic; text-align: left; padding-left: 20px; color: #333; }
-        #gantt .task-name { font-weight: normal; color: #000; text-align: left; padding-left: 10px; }
+        /* Gantt */
+        .gantt-controls {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 1rem;
+        }
+        .gantt-container {
+            background: #ffffff;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            margin-bottom: 2rem;
+            overflow-x: auto;
+            /* Increased height to allow more rows without vertical scrolling */
+            max-height: none;
+            height: auto;
+        }
+        #gantt table {
+            font-size: 0.875rem;
+            border-collapse: collapse;
+            width: max-content;
+            min-width: 2500px; /* Increased for extended timeline */
+            table-layout: fixed;
+        }
+        #gantt th, #gantt td {
+            border: 1px solid #e2e8f0;
+            height: 20px;
+            text-align: center;
+            vertical-align: middle;
+            position: relative;
+            color: #0f172a;
+            padding: 0.5rem;
+        }
+        #gantt th.week-start, #gantt td.task-cell {
+            width: 35px; /* Increased from 25px for better visibility */
+            min-width: 35px;
+        }
+        #gantt th.left-header {
+            width: 300px; /* Slightly increased for longer task names */
+            background: #ffffff;
+        }
+        #gantt th.year-header {
+            background: #f1f5f9;
+            font-weight: 600;
+            color: #0f172a;
+        }
+        #gantt th.month {
+            background: #e2e8f0;
+            font-weight: 500;
+            color: #0f172a;
+        }
+        #gantt th.week-start {
+            background: #f8fafc;
+            color: #64748b;
+        }
+        #gantt td.task-cell {
+            background: #ffffff;
+        }
+        #gantt .phase-header {
+            background: #f1f5f9 !important;
+            font-weight: 600;
+            text-align: left;
+            padding-left: 1rem;
+            color: #0f172a;
+            border: 2px solid #e2e8f0;
+        }
+        #gantt .type-header {
+            background: #e2e8f0 !important;
+            font-style: italic;
+            text-align: left;
+            padding-left: 1rem;
+            color: #64748b;
+        }
+        #gantt .task-name {
+            font-weight: 400;
+            color: #0f172a;
+            text-align: left;
+            padding-left: 1rem;
+            background: #ffffff;
+        }
+        /* Sticky first column for Gantt */
+        #gantt thead th:first-child,
+        #gantt tbody td:first-child {
+            position: sticky;
+            left: 0;
+            z-index: 20;
+            border-right: none !important;
+        }
+        #gantt .phase-header:first-child,
+        #gantt .type-header:first-child,
+        #gantt .task-name {
+            border-right: none !important;
+        }
         /* Calendar Today Highlight */
         #calendar .fc-daygrid-day.fc-day-today,
         #calendar .fc-multimonth-day.fc-day-today {
-            background-color: blue !important;
+            background-color: #FFD700 !important;
         }
         /* Modal Styles */
         #modal {
@@ -91,16 +206,55 @@
         #closeModal:hover {
             color: black;
         }
+        /* CSV Import Styles */
+        .csv-import {
+            border: 2px dashed #ccc;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 10px;
+            background: #f9f9f9;
+        }
+        .csv-import.dragover {
+            border-color: #4CAF50;
+            background: #e8f5e8;
+        }
+        .csv-import input[type="file"] {
+            display: none;
+        }
+        .charts-row {
+            display: flex;
+            justify-content: space-around;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .chart-section {
+            flex: 1;
+            min-width: 400px;
+            background: white;
+            padding: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        #toggleTable {
+            background: #2196F3;
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 <body>
     <h1>Wallbridge Work Delivery Tracker</h1>
-  
     <!-- Input Section -->
-    <div class="input-section">
+    <div class="input-section" id="inputSection">
         <h2>Add/Edit Data</h2>
         <button id="addRow">Add New Row</button>
-        <table id="dataTable">
+        <button id="toggleTable">Hide Table</button>
+        <div class="csv-import" id="csvImport">
+            <p>Drag & drop CSV here or <button id="browseCsv">Browse CSV</button></p>
+            <p>Fetch CSV from: \\wmfensrvfs1\projects\3_Land_Management\Work_Tracker\Work_Delivery_Tracker.csv</p>
+            <input type="file" id="csvFile" accept=".csv">
+        </div>
+        <button id="toggleFilters" class="filter-toggle">Filters</button>
+        <table id="dataTable" style="display: block;">
             <thead>
                 <tr>
                     <th>Assignment Name</th>
@@ -110,7 +264,7 @@
                     <th>Delivery Date</th>
                     <th>Days to Delivery</th>
                     <th>Deadline Date</th>
-                    <th>Status (Auto)</th>
+                    <th>Status</th>
                     <th>Progress</th>
                     <th>Notes</th>
                     <th>Actions</th>
@@ -130,8 +284,8 @@
                 <p id="totalTasks">0</p>
             </div>
             <div class="analytic-card">
-                <h3>Good</h3>
-                <p id="goodCount">0</p>
+                <h3>Got Time</h3>
+                <p id="gotTimeCount">0</p>
             </div>
             <div class="analytic-card">
                 <h3>At Risk</h3>
@@ -150,19 +304,13 @@
                 <p id="inProgressCount">0</p>
             </div>
             <div class="analytic-card">
-                <h3>Complete</h3>
-                <p id="completeCount">0</p>
+                <h3>Submitted</h3>
+                <p id="submittedCount">0</p>
             </div>
-        </div>
-        <h2>Upcoming Alerts</h2>
-        <div id="alerts"></div>
-        <h2>Status Breakdown Chart</h2>
-        <div class="chart-container">
-            <canvas id="statusChart"></canvas>
-        </div>
-        <h2>Progress Breakdown Chart</h2>
-        <div class="chart-container">
-            <canvas id="progressChart"></canvas>
+            <div class="analytic-card">
+                <h3>Complete/Accepted</h3>
+                <p id="completeAcceptedCount">0</p>
+            </div>
         </div>
         <h2>Calendar View</h2>
         <div class="calendar-controls">
@@ -174,10 +322,28 @@
         <div class="calendar-container">
             <div id="calendar"></div>
         </div>
-        <h2>12-Month Gantt Chart</h2>
-        <button id="exportGantt">Download Gantt as PDF</button>
+        <h2>Extended Gantt Chart</h2>
+        <div class="gantt-controls">
+        </div>
         <div class="gantt-container">
             <div id="gantt"></div>
+        </div>
+        <h2>Upcoming Alerts</h2>
+        <div id="alerts"></div>
+        <h2>Charts</h2>
+        <div class="charts-row">
+            <div class="chart-section">
+                <h3>Status Breakdown Chart</h3>
+                <div class="chart-container">
+                    <canvas id="statusChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-section">
+                <h3>Progress Breakdown Chart</h3>
+                <div class="chart-container">
+                    <canvas id="progressChart"></canvas>
+                </div>
+            </div>
         </div>
     </div>
     <!-- Modal for Calendar Popup -->
@@ -190,15 +356,24 @@
     <script>
         // Wait for DOM ready
         document.addEventListener('DOMContentLoaded', function() {
-            // Data storage
-            let data = JSON.parse(localStorage.getItem('dashboardData')) || [];
-            const types = ['Assessment Report', 'Permit Application', 'Other'];
-            const projects = ['Martiniere', 'Fenelon', 'Casault', 'Harri', 'Grasset', 'Doigt'];
-            const progressOptions = ['Not Started', 'In Progress', 'Complete'];
-            const today = new Date('2025-10-28');
+            // Data storage - start empty by default
+            let data = [];
+            // Removed localStorage load to ensure no data by default
+            const predefinedTypes = ['Assessment Report', 'Permit Application', 'Other'];
+            const predefinedProjects = ['Martiniere', 'Fenelon', 'Casault', 'Harri', 'Grasset', 'Doigt','Detour East JV'];
+            const progressOptions = ['Not Started', 'In Progress', 'Submitted', 'Complete/Accepted'];
+            const statusOptions = ['Got Time', 'At Risk', 'Overdue', 'Complete'];
+            const typeColors = {
+                'Assessment Report': { safe: '#FFDCB8', atrisk: '#FFB05C', complete: '#F57E00' },
+                'Permit Application': { safe: '#90CAF9', atrisk: '#2196F3', complete: '#0D47A1' },
+                'Other': { safe: '#CE93D8', atrisk: '#9C27B0', complete: '#4A148C' },
+                'Claim Renewal': { safe: '#D7CCC8', atrisk: '#A1887F', complete: '#946A3E' }
+            };
+            // Dynamic today date
+            const today = new Date();
             const todayStr = today.toISOString().split('T')[0];
             function computeStatus(daysToDelivery) {
-                if (daysToDelivery > 30) return 'Good';
+                if (daysToDelivery > 30) return 'Got Time';
                 if (daysToDelivery > 0) return 'At Risk';
                 return 'Overdue';
             }
@@ -206,6 +381,30 @@
                 if (!dateStr) return false;
                 const date = new Date(dateStr);
                 return !isNaN(date.getTime()) && dateStr === date.toISOString().split('T')[0];
+            }
+            function normalizeProgress(p) {
+                if (!p) return 'Not Started';
+                p = p.trim().toLowerCase();
+                if (p.includes('not started') || p.includes('pending') || p.includes('ns')) return 'Not Started';
+                if (p.includes('in progress') || p.includes('ongoing') || p.includes('ip')) return 'In Progress';
+                if (p.includes('submitted') || p.includes('sent') || p.includes('sub')) return 'Submitted';
+                if (p.includes('complete') || p.includes('accepted') || p.includes('done') || p.includes('ca')) return 'Complete/Accepted';
+                // If no match, default to 'Not Started' or keep original? For safety, default
+                return 'Not Started';
+            }
+            function getFlattened(items, parentId = null, depth = 0) {
+                return items
+                    .filter(item => item.parentId === parentId)
+                    .sort((a, b) => {
+                        if ((a.project || '') !== (b.project || '')) return (a.project || '').localeCompare(b.project || '');
+                        const dateA = new Date(a.deadlineDate || a.deliveryDate || '9999-12-31T00:00:00Z');
+                        const dateB = new Date(b.deadlineDate || b.deliveryDate || '9999-12-31T00:00:00Z');
+                        return dateA.getTime() - dateB.getTime();
+                    })
+                    .flatMap(item => [{ ...item, depth }, ...getFlattened(items, item.id, depth + 1)]);
+            }
+            function getChildren(parentId, items = data) {
+                return items.filter(i => i.parentId === parentId);
             }
             // Safe destroy function
             function safeDestroy(chartVar) {
@@ -224,6 +423,164 @@
                     generateDashboard();
                 }
             }
+            // CSV Import Functions
+            function parseCSV(csvText) {
+                const lines = csvText.trim().split('\n');
+                const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
+                const rows = lines.slice(1).map(line => {
+                    const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
+                    return headers.reduce((obj, header, i) => {
+                        obj[header] = values[i] || '';
+                        return obj;
+                    }, {});
+                });
+                return rows;
+            }
+            function importCSV(file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const csvData = parseCSV(e.target.result);
+                        const nameToId = {};
+                        // First pass: create IDs and store temp data with parent info
+                        const tempData = csvData.map((csvRow, index) => {
+                            const id = String(Date.now() + index);
+                            const name = csvRow.assignment_name || csvRow['assignment_name'] || '';
+                            nameToId[name] = id;
+                            return {
+                                id: id,
+                                parentId: null,
+                                tempParentName: csvRow.parent_assignment_name || csvRow['parent_assignment_name'] || '',
+                                name: name,
+                                type: csvRow.type || predefinedTypes[0],
+                                project: csvRow.project_name || csvRow['project_name'] || predefinedProjects[0],
+                                responsible: csvRow.responsible || '',
+                                deliveryDate: csvRow.delivery_date || csvRow['delivery_date'] || '',
+                                startDate: csvRow.start_date || csvRow['start_date'] || '',
+                                daysToDelivery: 0,
+                                deadlineDate: csvRow.deadline_date || csvRow['deadline_date'] || '',
+                                progress: normalizeProgress(csvRow.progress),
+                                notes: csvRow.notes || ''
+                            };
+                        });
+                        // Second pass: set parentIds
+                        tempData.forEach(item => {
+                            if (item.tempParentName && nameToId[item.tempParentName]) {
+                                item.parentId = nameToId[item.tempParentName];
+                            }
+                            delete item.tempParentName;
+                        });
+                        data = tempData;
+                        localStorage.setItem('dashboardData', JSON.stringify(data));
+                        // Reset filters on import to ensure all data visible by default
+                        localStorage.removeItem('tableFilters');
+                        renderTable();
+                        updateDashboardIfVisible();
+                        document.getElementById('debug').innerHTML = `Imported ${tempData.length} rows successfully (including multi-level children).`;
+                    } catch (err) {
+                        document.getElementById('debug').innerHTML = `Import error: ${err.message}`;
+                    }
+                };
+                reader.readAsText(file);
+            }
+            const csvImport = document.getElementById('csvImport');
+            const csvFile = document.getElementById('csvFile');
+            const browseCsv = document.getElementById('browseCsv');
+            browseCsv.addEventListener('click', () => {
+                csvFile.click();
+            });
+            csvFile.addEventListener('change', (e) => {
+                if (e.target.files[0]) {
+                    importCSV(e.target.files[0]);
+                }
+            });
+            csvImport.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                csvImport.classList.add('dragover');
+            });
+            csvImport.addEventListener('dragleave', () => {
+                csvImport.classList.remove('dragover');
+            });
+            csvImport.addEventListener('drop', (e) => {
+                e.preventDefault();
+                csvImport.classList.remove('dragover');
+                if (e.dataTransfer.files[0] && e.dataTransfer.files[0].type === 'text/csv') {
+                    importCSV(e.dataTransfer.files[0]);
+                } else {
+                    document.getElementById('debug').innerHTML = 'Please drop a valid CSV file.';
+                }
+            });
+            // Filter functions
+            const columns = ['Assignment Name', 'Type', 'Project Name', 'Responsible', 'Delivery Date', 'Days to Delivery', 'Deadline Date', 'Status', 'Progress', 'Notes', 'Actions'];
+            const filterCols = [1, 2, 7, 8]; // Type, Project, Status, Progress
+            window.toggleFilters = function() {
+                const filterRow = document.querySelector('.filter-row');
+                filterRow.classList.toggle('show');
+            };
+            window.updateFilter = function(col, value, checked) {
+                let filters = JSON.parse(localStorage.getItem('tableFilters') || '{}');
+                if (!filters[col]) filters[col] = [];
+                const idx = filters[col].indexOf(value);
+                if (checked) {
+                    if (idx === -1) filters[col].push(value);
+                } else {
+                    if (idx > -1) filters[col].splice(idx, 1);
+                }
+                localStorage.setItem('tableFilters', JSON.stringify(filters));
+                applyFilters();
+                updateDashboardIfVisible();
+            };
+            function applyFilters() {
+                let filters = JSON.parse(localStorage.getItem('tableFilters') || '{}');
+                const rows = Array.from(document.querySelectorAll('#tableBody tr'));
+                rows.forEach(tr => {
+                    let show = true;
+                    const cells = tr.querySelectorAll('td');
+                    for (let col in filters) {
+                        if (!show) break;
+                        const filterVals = filters[col];
+                        if (filterVals.length === 0) {
+                            continue;
+                        }
+                        let cellVal = '';
+                        const sel = cells[col].querySelector('select');
+                        if (sel) {
+                            cellVal = sel.value;
+                        } else {
+                            const spans = cells[col].querySelectorAll('span');
+                            cellVal = Array.from(spans).map(s => s.textContent).join(' ');
+                        }
+                        if (!filterVals.includes(cellVal)) {
+                            show = false;
+                        }
+                    }
+                    tr.style.display = show ? '' : 'none';
+                });
+            }
+            function getFilteredData() {
+                let filters = JSON.parse(localStorage.getItem('tableFilters') || '{}');
+                const flattened = getFlattened(data);
+                return flattened.filter(row => {
+                    const daysToDelivery = row.daysToDelivery || (row.deliveryDate && isValidDate(row.deliveryDate) ? Math.floor((new Date(row.deliveryDate) - today) / (1000 * 60 * 60 * 24)) : 0);
+                    let status = computeStatus(daysToDelivery);
+                    let progress = normalizeProgress(row.progress || 'Not Started');
+                    if (progress === 'Complete/Accepted') status = 'Complete';
+                
+                    for (let col in filters) {
+                        const filterVals = filters[col];
+                        if (filterVals.length === 0) {
+                            return false;
+                        }
+                        let cellVal = '';
+                        if (col == 1) cellVal = row.type || '';
+                        else if (col == 2) cellVal = row.project || '';
+                        else if (col == 7) cellVal = status;
+                        else if (col == 8) cellVal = progress;
+                        if (!filterVals.includes(cellVal)) return false;
+                    }
+                    return true;
+                });
+            }
             // Modal functions
             window.closeModal = function() {
                 document.getElementById('modal').style.display = 'none';
@@ -237,46 +594,131 @@
                     closeModal();
                 }
             };
+            // Toggle Table
+            document.getElementById('toggleTable').addEventListener('click', function() {
+                const table = document.getElementById('dataTable');
+                const btn = document.getElementById('toggleTable');
+                if (table.style.display === 'none') {
+                    table.style.display = 'table';
+                    btn.textContent = 'Hide Table';
+                } else {
+                    table.style.display = 'none';
+                    btn.textContent = 'Show Table';
+                }
+            });
             // Populate table
             function renderTable() {
+                const flattened = getFlattened(data);
+                // FIXED: Collect unique values dynamically for Type and Project filters
+                const uniqueTypes = [...new Set(flattened.map(row => row.type || '').filter(t => t))].sort();
+                const uniqueProjects = [...new Set(flattened.map(row => row.project || '').filter(p => p))].sort();
+                const table = document.getElementById('dataTable');
+                const thead = table.querySelector('thead');
+                let filterRowHtml = '';
+                columns.forEach((col, i) => {
+                    if (filterCols.includes(i)) {
+                        let checkboxes = '';
+                        let options = [];
+                        if (i === 1) options = uniqueTypes;
+                        else if (i === 2) options = uniqueProjects;
+                        else if (i === 7) options = statusOptions;
+                        else if (i === 8) options = progressOptions;
+                        options.forEach(opt => {
+                            checkboxes += `<label><input type="checkbox" value="${opt}" onchange="updateFilter(${i}, '${opt}', this.checked)"> ${opt}</label>`;
+                        });
+                        filterRowHtml += `<th><div class="filter-group">${checkboxes}</div></th>`;
+                    } else {
+                        filterRowHtml += '<th></th>';
+                    }
+                });
+                thead.innerHTML = `
+                    <tr>
+                        ${columns.map(col => `<th>${col}</th>`).join('')}
+                    </tr>
+                    <tr class="filter-row">
+                        ${filterRowHtml}
+                    </tr>
+                `;
+                // Load saved filters and correctly set checkbox states
+                const filters = JSON.parse(localStorage.getItem('tableFilters') || '{}');
+                // FIXED: Use dynamic options for initialization
+                const optionsByCol = {
+                    1: uniqueTypes, // Type - dynamic
+                    2: uniqueProjects, // Project Name - dynamic
+                    7: statusOptions, // Status
+                    8: progressOptions // Progress
+                };
+                filterCols.forEach(colIdx => {
+                    // Target the filter-row th
+                    const th = document.querySelector(`.filter-row th:nth-child(${colIdx + 1})`);
+                    if (!th) return;
+                    const cbs = th.querySelectorAll('input[type="checkbox"]');
+                    let savedFilter = filters[colIdx] || [];
+                    const fullOptions = optionsByCol[colIdx] || [];
+                    // If no saved filter (undefined), initialize to full options list
+                    if (!filters[colIdx]) {
+                        savedFilter = [...fullOptions];
+                        filters[colIdx] = savedFilter;
+                        localStorage.setItem('tableFilters', JSON.stringify(filters));
+                    }
+                    // Uncheck all first
+                    cbs.forEach(cb => cb.checked = false);
+                    // Check saved ones
+                    savedFilter.forEach(val => {
+                        const cb = Array.from(cbs).find(c => c.value === val);
+                        if (cb) cb.checked = true;
+                    });
+                });
                 const tbody = document.getElementById('tableBody');
                 tbody.innerHTML = '';
-                data.forEach((row, index) => {
+                flattened.forEach((row) => {
                     const daysToDelivery = row.daysToDelivery || (row.deliveryDate && isValidDate(row.deliveryDate) ? Math.floor((new Date(row.deliveryDate) - today) / (1000 * 60 * 60 * 24)) : 0);
                     let status = computeStatus(daysToDelivery);
-                    const progress = row.progress || 'Not Started';
-                    const isComplete = progress === 'Complete';
+                    const progress = normalizeProgress(row.progress || 'Not Started');
+                    const isComplete = progress === 'Complete/Accepted';
                     if (isComplete) status = 'Complete';
                     const rowStatusClass = isComplete ? 'complete' : status.toLowerCase().replace(' ', '-');
                     const displayStatus = isComplete ? 'Complete' : status;
                     const tr = document.createElement('tr');
                     tr.className = `status-${rowStatusClass}`;
+                    const indentStyle = `padding-left: calc(8px + ${row.depth * 20}px);`; /* Base 8px + dynamic indent—match your uniform padding */
                     tr.innerHTML = `
-                        <td><input type="text" value="${row.name || ''}" onchange="updateData(${index}, 'name', this.value)"></td>
-                        <td><select onchange="updateData(${index}, 'type', this.value)">${types.map(t => `<option ${row.type === t ? 'selected' : ''}>${t}</option>`).join('')}</select></td>
-                        <td><select onchange="updateData(${index}, 'project', this.value)">${projects.map(p => `<option ${row.project === p ? 'selected' : ''}>${p}</option>`).join('')}</select></td>
-                        <td><input type="text" value="${row.responsible || ''}" onchange="updateData(${index}, 'responsible', this.value)"></td>
-                        <td><input type="date" value="${row.deliveryDate || ''}" onchange="updateData(${index}, 'deliveryDate', this.value); calcDays(${index})"></td>
-                        <td><span id="days-${index}">${daysToDelivery}</span></td>
-                        <td><input type="date" value="${row.deadlineDate || ''}" onchange="updateData(${index}, 'deadlineDate', this.value)"></td>
+                        <td style="${indentStyle}"><input type="text" value="${row.name || ''}" onchange="updateData('${row.id}', 'name', this.value)"></td>
+                        <td><select onchange="updateData('${row.id}', 'type', this.value)">${predefinedTypes.map(t => `<option ${row.type === t ? 'selected' : ''}>${t}</option>`).join('')}${row.type && !predefinedTypes.includes(row.type) ? `<option selected>${row.type}</option>` : ''}</select></td>
+                        <td><select onchange="updateData('${row.id}', 'project', this.value)">${predefinedProjects.map(p => `<option ${row.project === p ? 'selected' : ''}>${p}</option>`).join('')}${row.project && !predefinedProjects.includes(row.project) ? `<option selected>${row.project}</option>` : ''}</select></td>
+                        <td><input type="text" value="${row.responsible || ''}" onchange="updateData('${row.id}', 'responsible', this.value)"></td>
+                        <td><input type="date" value="${row.deliveryDate || ''}" onchange="updateData('${row.id}', 'deliveryDate', this.value); calcDays('${row.id}')"></td>
+                        <td><span>${daysToDelivery}</span></td>
+                        <td><input type="date" value="${row.deadlineDate || ''}" onchange="updateData('${row.id}', 'deadlineDate', this.value)"></td>
                         <td><span class="status-${rowStatusClass}">${displayStatus}</span></td>
-                        <td><select onchange="updateData(${index}, 'progress', this.value)" class="progress-${progress.toLowerCase().replace(' ', '-')}">${progressOptions.map(p => `<option ${progress === p ? 'selected' : ''}>${p}</option>`).join('')}</select></td>
-                        <td><textarea onchange="updateData(${index}, 'notes', this.value)">${row.notes || ''}</textarea></td>
-                        <td><button onclick="deleteRow(${index})">Delete</button></td>
+                        <td><select onchange="updateData('${row.id}', 'progress', this.value)" class="progress-${progress.toLowerCase().replace(' ', '-').replace('/', '-')}">${progressOptions.map(p => `<option ${progress === p ? 'selected' : ''}>${p}</option>`).join('')}</select></td>
+                        <td><textarea rows="2" onchange="updateData('${row.id}', 'notes', this.value)">${row.notes || ''}</textarea></td>
+                        <td><button onclick="addChild('${row.id}')">Add Child</button> <button onclick="deleteById('${row.id}')">Delete</button></td>
                     `;
                     tbody.appendChild(tr);
                 });
                 localStorage.setItem('dashboardData', JSON.stringify(data));
+                applyFilters();
+                document.getElementById('toggleFilters').onclick = toggleFilters;
             }
-            window.updateData = function(index, key, value) {
+            window.updateData = function(id, key, value) {
+                const index = data.findIndex(d => d.id === id);
+                if (index === -1) return;
                 data[index][key] = value;
-                if (key === 'deliveryDate') calcDays(index);
+                if (key === 'progress') {
+                    data[index][key] = normalizeProgress(value);
+                }
+                if (key === 'deliveryDate') calcDays(id);
+                localStorage.setItem('dashboardData', JSON.stringify(data));
                 renderTable();
                 updateDashboardIfVisible();
             };
-            window.calcDays = function(index) {
+            window.calcDays = function(id) {
+                const index = data.findIndex(d => d.id === id);
+                if (index === -1) return;
                 if (!data[index].deliveryDate || !isValidDate(data[index].deliveryDate)) {
                     data[index].daysToDelivery = 0;
+                    localStorage.setItem('dashboardData', JSON.stringify(data));
                     renderTable();
                     updateDashboardIfVisible();
                     return;
@@ -287,66 +729,105 @@
                 renderTable();
                 updateDashboardIfVisible();
             };
-            window.deleteRow = function(index) {
-                data.splice(index, 1);
+            window.deleteById = function(id) {
+                const children = getChildren(id);
+                if (children.length > 0) {
+                    alert('Cannot delete parent with children. Delete children first.');
+                    return;
+                }
+                const index = data.findIndex(d => d.id === id);
+                if (index > -1) {
+                    data.splice(index, 1);
+                    localStorage.setItem('dashboardData', JSON.stringify(data));
+                    renderTable();
+                    updateDashboardIfVisible();
+                }
+            };
+            window.addChild = function(parentId) {
+                const parentIndex = data.findIndex(d => d.id === parentId);
+                if (parentIndex === -1) return;
+                const parent = data[parentIndex];
+                data.push({
+                    id: String(Date.now()),
+                    parentId: parentId,
+                    project: parent.project || predefinedProjects[0],
+                    type: parent.type || predefinedTypes[0],
+                    name: '',
+                    responsible: parent.responsible || '',
+                    deliveryDate: parent.deliveryDate || '',
+                    startDate: '',
+                    daysToDelivery: 0,
+                    deadlineDate: parent.deadlineDate || '',
+                    progress: 'Not Started',
+                    notes: ''
+                });
+                localStorage.setItem('dashboardData', JSON.stringify(data));
                 renderTable();
                 updateDashboardIfVisible();
             };
             document.getElementById('addRow').addEventListener('click', () => {
                 data.push({
-                    project: projects[0],
-                    type: types[0],
+                    id: String(Date.now()),
+                    parentId: null,
+                    project: predefinedProjects[0],
+                    type: predefinedTypes[0],
                     name: '',
                     responsible: '',
                     deliveryDate: '',
+                    startDate: '',
                     daysToDelivery: 0,
                     deadlineDate: '',
                     progress: progressOptions[0],
                     notes: ''
                 });
+                localStorage.setItem('dashboardData', JSON.stringify(data));
                 renderTable();
                 updateDashboardIfVisible();
             });
             window.generateDashboard = function() {
-                if (data.length === 0) return alert('Add some data first!');
+                // Removed alert for empty data - allow empty dashboard
                 console.log('Generating dashboard with data:', data); // Debug log
                 document.querySelector('.input-section').style.display = 'block';
                 document.getElementById('dashboard').style.display = 'block';
                 document.getElementById('debug').innerHTML = ''; // Clear debug
+                const allData = getFilteredData();
                 try {
                     // Analytics
-                    const statusCounts = { Good: 0, 'At Risk': 0, Overdue: 0, Complete: 0 };
-                    const progressCounts = { 'Not Started': 0, 'In Progress': 0, Complete: 0 };
-                    data.forEach(item => {
-                        const days = item.daysToDelivery || 0;
+                    const statusCounts = { 'Got Time': 0, 'At Risk': 0, Overdue: 0, Complete: 0 };
+                    const progressCounts = { 'Not Started': 0, 'In Progress': 0, Submitted: 0, 'Complete/Accepted': 0 };
+                    allData.forEach(item => {
+                        const days = item.daysToDelivery || (item.deliveryDate && isValidDate(item.deliveryDate) ? Math.floor((new Date(item.deliveryDate) - today) / (1000 * 60 * 60 * 24)) : 0);
                         let status = computeStatus(days);
-                        const progress = item.progress || 'Not Started';
-                        if (progress === 'Complete') status = 'Complete';
+                        const progress = normalizeProgress(item.progress || 'Not Started');
+                        if (progress === 'Complete/Accepted') status = 'Complete';
                         statusCounts[status]++;
                         progressCounts[progress]++;
                     });
-                    document.getElementById('totalTasks').textContent = data.length;
-                    document.getElementById('goodCount').textContent = statusCounts.Good;
+                    document.getElementById('totalTasks').textContent = allData.length;
+                    document.getElementById('gotTimeCount').textContent = statusCounts['Got Time'];
                     document.getElementById('atRiskCount').textContent = statusCounts['At Risk'];
                     document.getElementById('overdueCount').textContent = statusCounts.Overdue;
                     document.getElementById('notStartedCount').textContent = progressCounts['Not Started'];
                     document.getElementById('inProgressCount').textContent = progressCounts['In Progress'];
-                    document.getElementById('completeCount').textContent = progressCounts.Complete;
+                    document.getElementById('submittedCount').textContent = progressCounts.Submitted;
+                    document.getElementById('completeAcceptedCount').textContent = progressCounts['Complete/Accepted'];
                     // Upcoming Alerts
-                    const alerts = { '30 Day Notices': [], Deadlines: [], Expiries: [] };
-                    data.forEach(item => {
+                    const alerts = { '30 Day Notices': [], 'Deliveries': [], Deadlines: [] };
+                    allData.forEach(item => {
                         const title = `${item.project || ''} - ${item.type || ''}: ${item.name || ''}`;
-                        // Expiry and 30 day notices based on delivery
+                        // Delivery and 30 day notices based on delivery
                         if (item.deliveryDate && isValidDate(item.deliveryDate)) {
                             const delivDate = new Date(item.deliveryDate);
                             const daysToDeliv = Math.floor((delivDate - today) / (1000 * 60 * 60 * 24));
                             if (daysToDeliv >= 0) {
-                                alerts.Expiries.push({ date: item.deliveryDate, title, days: daysToDeliv });
+                                const delivColor = typeColors[item.type]?.atrisk || '#FFEB3B'; // Darker for Delivery
+                                alerts['Deliveries'].push({ date: item.deliveryDate, title, days: daysToDeliv, color: delivColor });
                             }
                             const thirtyBefore = new Date(delivDate.getTime() - 30 * 24 * 60 * 60 * 1000);
                             const daysToThirty = Math.floor((thirtyBefore - today) / (1000 * 60 * 60 * 24));
                             if (daysToThirty >= 0) {
-                                alerts['30 Day Notices'].push({ date: thirtyBefore.toISOString().split('T')[0], title, days: daysToThirty });
+                                const thirtyColor = typeColors[item.type]?.safe || '#FF9800'; // Lighter for 30 Day
+                                alerts['30 Day Notices'].push({ date: thirtyBefore.toISOString().split('T')[0], title, days: daysToThirty, color: thirtyColor });
                             }
                         }
                         // Deadlines
@@ -354,7 +835,8 @@
                             const deadlDate = new Date(item.deadlineDate);
                             const daysToDeadl = Math.floor((deadlDate - today) / (1000 * 60 * 60 * 24));
                             if (daysToDeadl >= 0) {
-                                alerts.Deadlines.push({ date: item.deadlineDate, title, days: daysToDeadl });
+                                const deadlColor = '#F44336';
+                                alerts.Deadlines.push({ date: item.deadlineDate, title, days: daysToDeadl, color: deadlColor });
                             }
                         }
                     });
@@ -365,7 +847,7 @@
                         if (alerts[key].length === 0) return;
                         alertsHtml += `<h3>${key}</h3><ul>`;
                         alerts[key].forEach(al => {
-                            alertsHtml += `<li>${al.date} (${al.days} days): ${al.title}</li>`;
+                            alertsHtml += `<li style="border-left: 4px solid ${al.color}; background-color: ${al.color.replace('#', '')}20;">${al.date} (${al.days} days): ${al.title}</li>`;
                         });
                         alertsHtml += '</ul>';
                     });
@@ -377,7 +859,7 @@
                         type: 'pie',
                         data: {
                             labels: Object.keys(statusCounts),
-                            datasets: [{ data: Object.values(statusCounts), backgroundColor: ['#4CAF50', '#FFEB3B', '#F44336', '#4CAF50'] }]
+                            datasets: [{ data: Object.values(statusCounts), backgroundColor: ['#81C784', '#FFEB3B', '#F44336', '#2E7D32'] }]
                         },
                         options: {
                             responsive: true,
@@ -393,12 +875,13 @@
                         type: 'bar',
                         data: {
                             labels: Object.keys(progressCounts),
-                            datasets: [{ label: 'Count', data: Object.values(progressCounts), backgroundColor: ['#9E9E9E', '#FF9800', '#4CAF50'] }]
+                            datasets: [{ label: 'Count', data: Object.values(progressCounts), backgroundColor: ['#9E9E9E', '#FF9800', '#2196F3', '#2E7D32'] }]
                         },
                         options: {
                             responsive: true,
                             maintainAspectRatio: false,
                             plugins: { title: { display: true, text: 'Progress Breakdown' } },
+                            legend: { display: false },
                             scales: {
                                 y: {
                                     beginAtZero: true,
@@ -420,7 +903,7 @@
                     const initialDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
                     const minDate = new Date(initialDate);
                     const events = [];
-                    data.forEach(item => {
+                    allData.forEach(item => {
                         const shortTitle = `${item.project || 'Untitled'} - ${item.name || ''}`;
                         // Delivery event and 30 day notice
                         if (item.deliveryDate && isValidDate(item.deliveryDate)) {
@@ -430,7 +913,7 @@
                                 events.push({
                                     title: `Delivery Date - ${shortTitle}`,
                                     start: item.deliveryDate,
-                                    backgroundColor: '#FF9800'
+                                    backgroundColor: typeColors[item.type]?.atrisk || '#FFEB3B' // Darker for Delivery
                                 });
                             }
                             const thirtyBefore = new Date(delivDate.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -439,7 +922,7 @@
                                 events.push({
                                     title: `30 Day Notice - ${shortTitle}`,
                                     start: thirtyBefore.toISOString().split('T')[0],
-                                    backgroundColor: '#FFEB3B'
+                                    backgroundColor: typeColors[item.type]?.safe || '#FF9800' // Lighter for 30 Day
                                 });
                             }
                         }
@@ -533,20 +1016,20 @@
                     };
                     updateCalTitle();
                     console.log('Calendar rendered');
-                    // Gantt Table - Dynamic from 1 month prior to +1 year
+                    // Gantt Table - Dynamic from 1 month prior to +2 years (to include 2027)
                     const ganttEl = document.getElementById('gantt');
                     ganttEl.innerHTML = '';
                     const startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-                    const endDate = new Date(today.getFullYear() + 1, 11, 31);
-                    // Generate week starts (Sundays), starting from the Sunday of the week containing startDate
-                    let currentSunday = new Date(startDate);
-                    let day = currentSunday.getDay();
-                    let daysToSubtract = day;
-                    currentSunday.setDate(currentSunday.getDate() - daysToSubtract);
+                    const endDate = new Date(today.getFullYear() + 2, 11, 31);
+                    // Generate week starts (Mondays), starting from the Monday of or before the week containing startDate
+                    let currentMonday = new Date(startDate);
+                    let day = currentMonday.getDay();
+                    let daysToSubtract = (day + 6) % 7;
+                    currentMonday.setDate(currentMonday.getDate() - daysToSubtract);
                     let weekStarts = [];
-                    while (currentSunday <= endDate) {
-                        weekStarts.push(new Date(currentSunday).toISOString().split('T')[0]);
-                        currentSunday.setDate(currentSunday.getDate() + 7);
+                    while (currentMonday <= endDate) {
+                        weekStarts.push(new Date(currentMonday).toISOString().split('T')[0]);
+                        currentMonday.setDate(currentMonday.getDate() + 7);
                     }
                     // Find today week index
                     let todayWeekIndex = -1;
@@ -581,7 +1064,7 @@
                     // Year header row
                     let yearTr = document.createElement('tr');
                     let leftHeaderTh = document.createElement('th');
-                    leftHeaderTh.textContent = 'Project / Type / Assignment';
+                    leftHeaderTh.textContent = 'Project / Assignment';
                     leftHeaderTh.rowSpan = 1;
                     leftHeaderTh.className = 'left-header';
                     yearTr.appendChild(leftHeaderTh);
@@ -634,86 +1117,84 @@
                     });
                     thead.appendChild(weekTr);
                     let tbody = document.createElement('tbody');
-                    // Sort data for grouping
-                    const filteredData = data.filter(item => item.deliveryDate && isValidDate(item.deliveryDate)).sort((a, b) => {
-                        if ((a.project || '') !== (b.project || '')) return (a.project || '').localeCompare(b.project || '');
-                        if (a.type !== b.type) return a.type.localeCompare(b.type);
-                        return (a.name || '').localeCompare(b.name || '');
-                    });
+                    // Use filtered data for Gantt to respect filters
+                    const ganttFullData = getFilteredData().filter(item => item.deliveryDate && isValidDate(item.deliveryDate));
                     let currentProject = null;
-                    let currentType = null;
-                    filteredData.forEach((item) => {
-                        const progressItem = item.progress || 'Not Started';
-                        const isComplete = progressItem === 'Complete';
-                        const daysTo = item.daysToDelivery || 0;
-                        let startDateTask, endDateTask;
-                        const deliveryDateTask = new Date(item.deliveryDate);
-                        if (deliveryDateTask < today) {
-                            if (isComplete) {
-                                startDateTask = new Date(deliveryDateTask);
-                                endDateTask = new Date(today);
-                            } else {
-                                startDateTask = new Date(deliveryDateTask);
-                                endDateTask = new Date(deliveryDateTask);
-                            }
+                    ganttFullData.forEach((item) => {
+                        const progressItem = normalizeProgress(item.progress || 'Not Started');
+                        const isComplete = progressItem === 'Complete/Accepted';
+                        let startDateTask = null;
+                        let endDateTask = null;
+                        let delivDateTask = null;
+                        let deadlDateTask = null;
+                        delivDateTask = new Date(item.deliveryDate);
+                        deadlDateTask = item.deadlineDate && isValidDate(item.deadlineDate) ? new Date(item.deadlineDate) : delivDateTask;
+                        if (item.startDate && isValidDate(item.startDate)) {
+                            startDateTask = new Date(item.startDate);
+                        } else if (isComplete) {
+                            startDateTask = delivDateTask;
                         } else {
-                            startDateTask = new Date(today);
-                            endDateTask = new Date(deliveryDateTask);
+                            if (delivDateTask < today) {
+                                startDateTask = delivDateTask;
+                            } else {
+                                startDateTask = today;
+                            }
                         }
-                        const deadlineDateTask = item.deadlineDate && isValidDate(item.deadlineDate) ? new Date(item.deadlineDate) : endDateTask;
-                        endDateTask = new Date(Math.max(endDateTask.getTime(), deadlineDateTask.getTime()));
+                        if (isComplete) {
+                            endDateTask = new Date(Math.max(delivDateTask.getTime(), today.getTime()));
+                        } else {
+                            const maxDue = new Date(Math.max(delivDateTask.getTime(), deadlDateTask.getTime()));
+                            endDateTask = maxDue;
+                        }
                         if (item.project !== currentProject) {
                             // Project header
                             let trP = document.createElement('tr');
-                            let tdP = document.createElement('td');
-                            tdP.textContent = item.project || 'Untitled Project';
-                            tdP.colSpan = weekStarts.length + 1;
-                            tdP.className = 'phase-header';
-                            trP.appendChild(tdP);
+                            let tdPLeft = document.createElement('td');
+                            tdPLeft.textContent = item.project || 'Untitled Project';
+                            tdPLeft.colSpan = 1;
+                            tdPLeft.className = 'phase-header';
+                            trP.appendChild(tdPLeft);
+                            let tdPTime = document.createElement('td');
+                            tdPTime.colSpan = weekStarts.length;
+                            tdPTime.className = 'phase-header';
+                            tdPTime.style.backgroundColor = '#f1f5f9';
+                            trP.appendChild(tdPTime);
                             tbody.appendChild(trP);
                             currentProject = item.project;
-                            currentType = null;
-                        }
-                        if (item.type !== currentType) {
-                            // Type header
-                            let trT = document.createElement('tr');
-                            let tdT = document.createElement('td');
-                            tdT.textContent = item.type;
-                            tdT.colSpan = weekStarts.length + 1;
-                            tdT.className = 'type-header';
-                            trT.appendChild(tdT);
-                            tbody.appendChild(trT);
-                            currentType = item.type;
                         }
                         // Task row
                         let trTask = document.createElement('tr');
                         let tdName = document.createElement('td');
                         tdName.textContent = item.name;
                         tdName.className = 'task-name';
-                        if (isComplete) {
-                            tdName.style.backgroundColor = '#2e7d32';
-                            tdName.style.color = 'white';
-                        }
+                        tdName.style.paddingLeft = (item.depth * 20 + 10) + 'px';
+                        // For complete, keep white background and black text like others
                         trTask.appendChild(tdName);
                         weekStarts.forEach((ws, i) => {
                             let weekStart = new Date(ws);
                             let weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
                             let cell = document.createElement('td');
                             cell.className = 'task-cell';
-                            if (startDateTask < weekEnd && endDateTask > weekStart) {
+                            if (startDateTask && endDateTask && startDateTask < weekEnd && endDateTask > weekStart) {
                                 let cellColor;
                                 if (isComplete) {
-                                    cellColor = '#2e7d32'; // dark green
+                                    cellColor = '#2E7D32';
                                 } else {
-                                    const delivery = new Date(item.deliveryDate);
-                                    const thirtyDaysBefore = new Date(delivery.getTime() - 30 * 24 * 60 * 60 * 1000);
-                                    const weekMid = new Date((weekStart.getTime() + weekEnd.getTime()) / 2);
-                                    if (weekMid < thirtyDaysBefore) {
-                                        cellColor = '#4CAF50'; // green
-                                    } else if (weekMid < delivery) {
-                                        cellColor = '#FFEB3B'; // orange
+                                    const delivTime = delivDateTask.getTime();
+                                    const deadlTime = deadlDateTask.getTime();
+                                    const thirtyTime = delivTime - 30 * 24 * 60 * 60 * 1000;
+                                    const weekStartTime = weekStart.getTime();
+                                    const weekEndTime = weekEnd.getTime();
+                                    const weekMidTime = weekStartTime + (weekEndTime - weekStartTime) / 2;
+                                    // Removed red deadline marking
+                                    if (delivTime <= deadlTime && weekMidTime >= delivTime && weekMidTime < deadlTime) {
+                                        cellColor = typeColors[item.type]?.complete || '#2E7D32'; // darker
+                                    } else if (weekMidTime >= delivTime) {
+                                        cellColor = typeColors[item.type]?.atrisk || '#FFEB3B'; // medium
+                                    } else if (weekMidTime > thirtyTime) {
+                                        cellColor = typeColors[item.type]?.atrisk || '#FFEB3B';
                                     } else {
-                                        cellColor = '#F44336'; // red
+                                        cellColor = typeColors[item.type]?.safe || '#4CAF50';
                                     }
                                 }
                                 cell.style.backgroundColor = cellColor;
@@ -724,7 +1205,8 @@
                     });
                     table.appendChild(thead);
                     table.appendChild(tbody);
-                    table.style.width = (250 + weekStarts.length * 40) + 'px';
+                    // Increased width calculation based on new cell sizes
+                    table.style.width = (300 + weekStarts.length * 35) + 'px';
                     ganttEl.appendChild(table);
                     // Dynamic height for Gantt container
                     const ganttContainer = document.querySelector('.gantt-container');
@@ -732,41 +1214,24 @@
                     // Add continuous blue line overlay on today's date
                     if (todayWeekIndex >= 0) {
                         ganttEl.style.position = 'relative';
+                        const columnLeft = 300 + (todayWeekIndex * 35);
+                        let daysFromMonday = today.getDay() - 1;
+                        if (today.getDay() === 0) daysFromMonday = 6; // Sunday is day 6
+                        const pxPerDay = 35 / 7;
+                        const offset = daysFromMonday * pxPerDay;
                         const lineDiv = document.createElement('div');
                         lineDiv.style.cssText = `
                             position: absolute;
-                            left: ${250 + (todayWeekIndex * 40)}px;
+                            left: ${columnLeft + offset}px;
                             top: 0;
                             bottom: 0;
                             width: 3px;
-                            background-color: blue;
+                            background-color: #6366f1;
                             z-index: 10;
                             pointer-events: none;
                         `;
                         ganttEl.appendChild(lineDiv);
                     }
-                    // PDF export using html2pdf.js
-                    document.getElementById('exportGantt').onclick = () => {
-                        const element = document.querySelector('#gantt');
-                        const opt = {
-                            margin: 0.5,
-                            filename: 'Gantt_Chart.pdf',
-                            image: { type: 'jpeg', quality: 0.98 },
-                            html2canvas: { 
-                                scale: 0.8, // Adjust for quality vs file size; lower for wide tables
-                                useCORS: true,
-                                letterRendering: true,
-                                allowTaint: true
-                            },
-                            jsPDF: { 
-                                unit: 'in', 
-                                format: 'a4', 
-                                orientation: 'landscape' 
-                            },
-                            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-                        };
-                        html2pdf().set(opt).from(element).save();
-                    };
                     console.log('Gantt table rendered');
                 } catch (err) {
                     console.error('Dashboard error:', err);
