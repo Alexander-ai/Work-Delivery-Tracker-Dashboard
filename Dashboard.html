@@ -369,9 +369,16 @@
                 'Other': { safe: '#CE93D8', atrisk: '#9C27B0', complete: '#4A148C' },
                 'Claim Renewal': { safe: '#D7CCC8', atrisk: '#A1887F', complete: '#946A3E' }
             };
-            // Dynamic today date
+            // Dynamic today date - normalized to midnight in local timezone
             const today = new Date();
-            const todayStr = today.toISOString().split('T')[0];
+            today.setHours(0, 0, 0, 0);
+            const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+            // Helper function to get local date string (YYYY-MM-DD)
+            function getLocalDateString(date) {
+                return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+            }
+
             function computeStatus(daysToDelivery) {
                 if (daysToDelivery > 30) return 'Got Time';
                 if (daysToDelivery > 0) return 'At Risk';
@@ -1020,30 +1027,55 @@
                     const ganttEl = document.getElementById('gantt');
                     ganttEl.innerHTML = '';
                     const startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+                    startDate.setHours(0, 0, 0, 0);
                     const endDate = new Date(today.getFullYear() + 2, 11, 31);
-                    // Generate week starts (Mondays), starting from the Monday of or before the week containing startDate
-                    let currentMonday = new Date(startDate);
-                    let day = currentMonday.getDay();
-                    let daysToSubtract = (day + 6) % 7;
-                    currentMonday.setDate(currentMonday.getDate() - daysToSubtract);
+                    endDate.setHours(0, 0, 0, 0);
+                    // Generate week starts (Sundays), starting from the Sunday of or before the week containing startDate
+                    let currentSunday = new Date(startDate);
+                    let day = currentSunday.getDay();
+                    // day 0 = Sunday, so subtract day to get to previous/current Sunday
+                    currentSunday.setDate(currentSunday.getDate() - day);
+                    currentSunday.setHours(0, 0, 0, 0);
                     let weekStarts = [];
-                    while (currentMonday <= endDate) {
-                        weekStarts.push(new Date(currentMonday).toISOString().split('T')[0]);
-                        currentMonday.setDate(currentMonday.getDate() + 7);
+                    while (currentSunday <= endDate) {
+                        weekStarts.push(getLocalDateString(currentSunday));
+                        currentSunday.setDate(currentSunday.getDate() + 7);
                     }
-                    // Find today week index
+                    // Find today week index - find the Sunday that starts the week containing today
                     let todayWeekIndex = -1;
+                    const todayDayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+                    const todaySunday = new Date(today);
+                    todaySunday.setDate(today.getDate() - todayDayOfWeek);
+                    todaySunday.setHours(0, 0, 0, 0);
+                    const todaySundayStr = getLocalDateString(todaySunday);
+
+                    console.log('=== DEBUG INFO ===');
+                    console.log('Today raw:', today);
+                    console.log('Today formatted:', getLocalDateString(today));
+                    console.log('Today day of week:', todayDayOfWeek, '(0=Sun, 1=Mon, etc)');
+                    console.log('Today Sunday calculated:', todaySundayStr);
+                    console.log('First 15 week starts:', weekStarts.slice(0, 15));
+                    console.log('StartDate:', getLocalDateString(startDate));
+                    console.log('First Sunday:', weekStarts[0]);
+
                     for (let i = 0; i < weekStarts.length; i++) {
-                        const wsDate = new Date(weekStarts[i]);
-                        const weekEnd = new Date(wsDate.getTime() + 6 * 24 * 60 * 60 * 1000);
-                        if (wsDate <= today && today <= weekEnd) {
+                        if (weekStarts[i] === todaySundayStr) {
                             todayWeekIndex = i;
+                            console.log('✓ Found today week at index:', i, 'Week starts:', weekStarts[i]);
+                            console.log('Column position will be:', 300 + (i * 35), 'px');
                             break;
                         }
                     }
-                    if (todayWeekIndex === -1) todayWeekIndex = 0;
+                    if (todayWeekIndex === -1) {
+                        console.log('⚠ WARNING: Could not find today week');
+                        console.log('Looking for:', todaySundayStr);
+                        console.log('Available weeks:', weekStarts.slice(0, 20));
+                        todayWeekIndex = 0;
+                    }
+                    console.log('=================');
                     // Month starts and colspans, starting from the month of the first week
-                    const firstWeekDate = new Date(weekStarts[0]);
+                    const firstParts = weekStarts[0].split('-');
+                    const firstWeekDate = new Date(parseInt(firstParts[0]), parseInt(firstParts[1]) - 1, parseInt(firstParts[2]));
                     let m = new Date(firstWeekDate.getFullYear(), firstWeekDate.getMonth(), 1);
                     const monthStarts = [];
                     while (m <= endDate) {
@@ -1110,7 +1142,9 @@
                     weekTr.appendChild(leftEmptyThWeek);
                     weekStarts.forEach((ws, i) => {
                         let dayTh = document.createElement('th');
-                        let d = new Date(ws);
+                        // Parse the date string properly to avoid timezone issues
+                        const parts = ws.split('-');
+                        const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
                         dayTh.textContent = d.getDate();
                         dayTh.className = 'week-start';
                         weekTr.appendChild(dayTh);
@@ -1211,26 +1245,44 @@
                     // Dynamic height for Gantt container
                     const ganttContainer = document.querySelector('.gantt-container');
                     ganttContainer.style.height = (table.offsetHeight + 20) + 'px';
-                    // Add continuous blue line overlay on today's date
+                    // Add continuous blue line overlay at the start of current week
                     if (todayWeekIndex >= 0) {
                         ganttEl.style.position = 'relative';
-                        const columnLeft = 300 + (todayWeekIndex * 35);
-                        let daysFromMonday = today.getDay() - 1;
-                        if (today.getDay() === 0) daysFromMonday = 6; // Sunday is day 6
-                        const pxPerDay = 35 / 7;
-                        const offset = daysFromMonday * pxPerDay;
-                        const lineDiv = document.createElement('div');
-                        lineDiv.style.cssText = `
-                            position: absolute;
-                            left: ${columnLeft + offset}px;
-                            top: 0;
-                            bottom: 0;
-                            width: 3px;
-                            background-color: #6366f1;
-                            z-index: 10;
-                            pointer-events: none;
-                        `;
-                        ganttEl.appendChild(lineDiv);
+
+                        // More robust: measure the actual position of the target column
+                        // Get the header row with week days
+                        const weekHeaderRow = table.querySelector('thead tr:last-child');
+                        if (weekHeaderRow) {
+                            // Get all week header cells (skip first which is the left header)
+                            const weekCells = Array.from(weekHeaderRow.querySelectorAll('th.week-start'));
+
+                            if (weekCells[todayWeekIndex]) {
+                                // Get the actual left position of the target column
+                                const targetCell = weekCells[todayWeekIndex];
+                                const tableRect = table.getBoundingClientRect();
+                                const cellRect = targetCell.getBoundingClientRect();
+
+                                // Position at the outer left edge (where the border starts)
+                                const columnLeft = cellRect.left - tableRect.left;
+
+                                console.log('Drawing line at:', columnLeft, 'px (measured from DOM) for week index:', todayWeekIndex, 'Sunday:', todaySundayStr);
+
+                                const lineDiv = document.createElement('div');
+                                lineDiv.style.cssText = `
+                                    position: absolute;
+                                    left: ${columnLeft}px;
+                                    top: 0;
+                                    bottom: 0;
+                                    width: 3px;
+                                    background-color: #6366f1;
+                                    z-index: 10;
+                                    pointer-events: none;
+                                `;
+                                ganttEl.appendChild(lineDiv);
+                            } else {
+                                console.warn('Could not find target week cell at index:', todayWeekIndex);
+                            }
+                        }
                     }
                     console.log('Gantt table rendered');
                 } catch (err) {
