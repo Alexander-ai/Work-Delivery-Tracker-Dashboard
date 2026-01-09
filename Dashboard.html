@@ -443,6 +443,21 @@
                 });
                 return rows;
             }
+            // Helper function to normalize date format to YYYY-MM-DD
+            function normalizeDateFormat(dateStr) {
+                if (!dateStr || dateStr.trim() === '') return '';
+
+                // Try to parse the date
+                const parsed = new Date(dateStr);
+                if (isNaN(parsed.getTime())) return '';
+
+                // Return in YYYY-MM-DD format
+                const year = parsed.getFullYear();
+                const month = String(parsed.getMonth() + 1).padStart(2, '0');
+                const day = String(parsed.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            }
+
             function importCSV(file) {
                 const reader = new FileReader();
                 reader.onload = function(e) {
@@ -462,10 +477,10 @@
                                 type: csvRow.type || predefinedTypes[0],
                                 project: csvRow.project_name || csvRow['project_name'] || predefinedProjects[0],
                                 responsible: csvRow.responsible || '',
-                                deliveryDate: csvRow.delivery_date || csvRow['delivery_date'] || '',
-                                startDate: csvRow.start_date || csvRow['start_date'] || '',
+                                deliveryDate: normalizeDateFormat(csvRow.delivery_date || csvRow['delivery_date'] || ''),
+                                startDate: normalizeDateFormat(csvRow.start_date || csvRow['start_date'] || ''),
                                 daysToDelivery: 0,
-                                deadlineDate: csvRow.deadline_date || csvRow['deadline_date'] || '',
+                                deadlineDate: normalizeDateFormat(csvRow.deadline_date || csvRow['deadline_date'] || ''),
                                 progress: normalizeProgress(csvRow.progress),
                                 notes: csvRow.notes || ''
                             };
